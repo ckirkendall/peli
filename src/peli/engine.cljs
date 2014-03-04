@@ -52,24 +52,11 @@
 
 (defn overlap? [body1 body2]
   (let [{:keys [x y width height]} body1
-           [lx ly] [(+ x width) (+ y height)]
-           x2 (:x body2)
-           y2 (:y body2)
-           h2 (:height body2)
-           w2 (:width body2)
-           [lx2 ly2] [(+ x2 w2) (+ y2 h2)]]
-    (or (and (>= x x2) (<= x lx2)
-             (>= y y2) (<= y ly2))
-        (and (<= lx lx2) (>= lx x2)
-             (<= ly ly2) (>= ly y2))
-        (and (<= lx lx2) (>= lx x2) 
-             (>= y y2) (<= y ly2))
-        (and (>= x x2) (<= x lx2)
-             (<= ly ly2) (>= ly y2))
-        (and (>= ly y2) (<= y y2)
-             (>= x x2) (<= x lx2))
-        (and (>= ly y2) (<= y y2)
-             (<= lx lx2) (>= lx x2)))))
+        {x2 :x y2 :y h2 :height w2 :width} body2
+        [lx ly] [(+ x width) (+ y height)]
+        [lx2 ly2] [(+ x2 w2) (+ y2 h2)]]
+    (and (> lx x2) (<= x lx2)
+         (> ly y2) (<= y ly2))))
 
 
 (defn check-bounds [n offset min max]
