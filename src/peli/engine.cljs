@@ -141,7 +141,7 @@
      (for [body (:bodies world)]
       (-> body
           (gravity ch)
-          (physics 0 (:board world ch)))))))
+          (physics 0 (:board world) ch))))))
 
 
 (defn handle-collisions [world ch]
@@ -176,7 +176,6 @@
 (defn handle-keys [ch actions]
   (let [on-down (set (filter #(:on-down (get actions %)) (keys actions)))
         on-up (set (filter #(:on-up (get actions %)) (keys actions)))]
-    (println on-down on-up)
     (set! (.-onkeydown js/document) 
        #(let [code (get-key-code %)]
           (if (on-down code)
