@@ -180,8 +180,8 @@
                             (fn [vy] (if (= vy 0)
                                       (do (play-sound "jump") 5)
                                       vy)))}
-   13 {:on-down #(assoc (remove-body "start" %) :pause? false)}
-   27 {:on-down #(assoc % :pause? true)}})
+   13 {:on-down #(assoc (remove-body "start" %) :run-state :running)}
+   27 {:on-down #(assoc % :run-state :paused)}})
 
 (def world 
   (World. {:width 1000 :height 400 :img nil :color "#7F7FFF"}
