@@ -2,6 +2,17 @@
   (:require [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; GAME DATA STRUCTURE
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defrecord World [board frame bodies pause?])
+
+(defrecord Game [worlds active-world state])
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; PROTOCOLS
@@ -166,12 +177,12 @@
     (set! (.-onkeydown js/document) 
        #(let [code (get-key-code %)]
           (if (on-down code)
-            (put! ch {:action :edit 
+            (put! ch {:action :edit-world 
                       :fn (get-in actions [code :on-down])}))))
     (set! (.-onkeyup js/document) 
        #(let [code (get-key-code %)]
           (if (on-up code)
-            (put! ch {:action :edit 
+            (put! ch {:action :edit-world
                       :fn (get-in actions [code :on-up])}))))))
 
 
@@ -199,19 +210,27 @@
       
 
 (defn draw-action [ch world ctx]
-  (-> world
-    (run-physics ch)
-    (handle-collisions ch)
-    (adjust-frame)
-    (draw-world ctx ch)))
+  (if (:pause? world)
+    (-> world
+        (adjust-frame)
+        (draw-world ctx ch))
+    (-> world
+        (run-physics ch)
+        (handle-collisions ch)
+        (adjust-frame)
+        (draw-world ctx ch))))
 
 
 
-(defn schedule-edit [f ch timing]
-  (go (<! (timeout timing))
-      (put! ch {:action :edit :fn f})))
+(defn schedule-edit
+  ([f ch timing] (schedule-edit f ch timing nil))
+  ([f ch timing type]
+     (let [action (or type :edit-world)]
+       (go (<! (timeout timing))
+           (put! ch {:action action :fn f})))))
 
-(defn run-loop [ch world ctx cnt]
+
+(defn run-loop [ch game ctx cnt]
   ;;25 FPS
   (go 
     (while true
@@ -219,11 +238,19 @@
      (put! ch {:action :draw-world})))
   
   ;;action loop
-  (go-loop [w world c cnt]
+  (go-loop [g game c cnt]
     (let [msg (<! ch)]
       (when (< c 10000) 
         (case (:action msg)
-          :draw-world (recur (draw-action ch w ctx) (inc c))
-          :edit (recur ((:fn msg) w) (inc c))
-          (recur w (inc c)))))))
+          :draw-world (recur (assoc g
+                               :active-world
+                               (draw-action ch (:active-world g) ctx)) (inc c))
+          :edit-world (recur (assoc g
+                               :active-world
+                               ((:fn msg) (:active-world g))) (inc c))
+          :edit-game (recur ((:fn msg) g) (inc c))
+          :switch-world (recur (assoc g
+                                 :active-world
+                                 (get-in g :worlds (:data msg))) (inc c))
+          (recur g (inc c)))))))
 
