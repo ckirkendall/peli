@@ -20,16 +20,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defprotocol Gravity
-  (gravity [this ch]))
+  (gravity [this ch state]))
 
 (defprotocol Physics
-  (physics [this time-diff board ch]))
+  (physics [this time-diff board ch state]))
 
 (defprotocol Pen 
-   (draw [this ctx frame ch]))
+   (draw [this ctx frame ch state]))
 
 (defprotocol Collision 
-   (collide [this body ch]))
+   (collide [this body ch state]))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -40,19 +40,19 @@
 
 (extend-protocol Physics
    object
-   (physics [this time-diff board ch] this))
+   (physics [this time-diff board ch state] this))
 
 (extend-protocol Gravity
    object   
-   (gravity [this ch] this))
+   (gravity [this ch state] this))
 
 (extend-protocol Pen
    object   
-   (draw [this ctx frame ch] this))
+   (draw [this ctx frame ch state] this))
 
 (extend-protocol Collision 
    object
-   (collide [this body ch] this))
+   (collide [this body ch state] this))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -133,33 +133,33 @@
 (defn play-sound [id]
   (.play (.getElementById js/document id)))
 
-(defn run-physics [world ch]
+(defn run-physics [world ch state]
   (assoc world :bodies
     (vec
      (for [body (:bodies world)]
       (-> body
-          (gravity ch)
-          (physics 0 (:board world) ch))))))
+          (gravity ch state)
+          (physics 0 (:board world) ch state))))))
 
 
-(defn handle-collisions [world ch]
+(defn handle-collisions [world ch state]
   (assoc world :bodies
     (vec 
      (for [body (:bodies world)]
-      (reduce #(collide %1 %2 ch) 
+      (reduce #(collide %1 %2 ch state) 
               body (filter #(and (not (identical? body %))
                                  (overlap? body %))
                              (:bodies world)))))))
 
 
 
-(defn draw-world [world ctx ch]
+(defn draw-world [world ctx ch state]
   (set! (.-fillStyle ctx) (get-in world [:board :color]))
   (.fillRect ctx 0 0 (get-in world [:frame :width]) 
                      (get-in world [:frame :height]))
   (doseq [body (:bodies world)]
     (if (overlap? body (:frame world))
-      (draw body ctx (:frame world) ch)))
+      (draw body ctx (:frame world) ch state)))
   world)
 
 
@@ -209,16 +209,16 @@
         :y (check-bounds y height 0 (get-in nworld [:board :height]))))))
       
 
-(defn draw-action [ch world ctx]
+(defn draw-action [ch world state ctx]
   (if (:pause? world)
     (-> world
         (adjust-frame)
-        (draw-world ctx ch))
+        (draw-world ctx ch state))
     (-> world
-        (run-physics ch)
-        (handle-collisions ch)
+        (run-physics ch state)
+        (handle-collisions ch state)
         (adjust-frame)
-        (draw-world ctx ch))))
+        (draw-world ctx ch state))))
 
 
 
@@ -228,6 +228,7 @@
      (let [action (or type :edit-world)]
        (go (<! (timeout timing))
            (put! ch {:action action :fn f})))))
+
 
 
 (defn run-loop [ch game ctx cnt]
@@ -242,9 +243,11 @@
     (let [msg (<! ch)]
       (when (< c 10000) 
         (case (:action msg)
-          :draw-world (recur (assoc g
-                               :active-world
-                               (draw-action ch (:active-world g) ctx)) (inc c))
+          :draw-world (recur
+                       (assoc g
+                         :active-world
+                         (draw-action ch (:active-world g) (:state g) ctx))
+                       (inc c))
           :edit-world (recur (assoc g
                                :active-world
                                ((:fn msg) (:active-world g))) (inc c))
