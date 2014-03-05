@@ -9,7 +9,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defrecord World [board frame bodies pause?])
+(defrecord World [board frame bodies key-actions run-state])
 
 (defrecord Game [worlds active-world state])
 
@@ -231,7 +231,8 @@
 
 
 
-(defn run-loop [ch game ctx cnt]
+(defn run-loop [ch game ctx world-id]
+  (put! ch {:action :switch-world :data world-id})
   ;;25 FPS
   (go 
     (while true
@@ -239,21 +240,26 @@
      (put! ch {:action :draw-world})))
   
   ;;action loop
-  (go-loop [g game c cnt]
-    (let [msg (<! ch)]
-      (when (< c 10000) 
-        (case (:action msg)
-          :draw-world (recur
-                       (assoc g
-                         :active-world
-                         (draw-action ch (:active-world g) (:state g) ctx))
-                       (inc c))
-          :edit-world (recur (assoc g
-                               :active-world
-                               ((:fn msg) (:active-world g))) (inc c))
-          :edit-game (recur ((:fn msg) g) (inc c))
-          :switch-world (recur (assoc g
-                                 :active-world
-                                 (get-in g :worlds (:data msg))) (inc c))
-          (recur g (inc c)))))))
+  (go-loop [g game]
+    (let [msg (<! ch)] 
+      (case (:action msg)
+        :draw-world (recur
+                     (assoc g
+                       :active-world
+                       (draw-action ch (:active-world g) (:state g) ctx)))
+        :edit-world (recur (assoc g
+                             :active-world
+                             ((:fn msg) (:active-world g))))
+        :edit-game (recur ((:fn msg) g))
+        :switch-world (recur (let [world (get-in g [:worlds (:data msg)])]
+                               (when (:key-actions world)
+                                 (handle-keys ch (:key-actions world)))
+                               (assoc g :active-world world)))
+        (recur g)))))
 
+(defn run-game [game canvas-id world-id]
+  (let [ch (chan)
+        can (.getElementById js/document canvas-id)
+        ctx (.getContext can "2d")]
+    (run-loop ch game ctx world-id)
+    ch))
