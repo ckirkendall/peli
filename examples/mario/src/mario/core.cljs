@@ -204,10 +204,10 @@
        :on-up #(assoc-in % [:bodies 0 :vx] 0)}
    37 {:on-down #(assoc-in % [:bodies 0 :vx] -2) ;left
        :on-up #(assoc-in % [:bodies 0 :vx] 0)}
-   32 {:on-down #(do
-                   (play-sound "jump")
-                   (update-in % [:bodies 0 :vy]    ;jump
-                              (fn [vy] (if (= vy 0) 5 vy))))}
+   32 {:on-down #(update-in % [:bodies 0 :vy]    ;jump
+                            (fn [vy] (if (= vy 0)
+                                      (do (play-sound "jump") 5)
+                                      vy)))}
    13 {:on-down #(assoc (remove-body "start" %) :pause? false)}
    27 {:on-down #(assoc % :pause? true)}})
 
