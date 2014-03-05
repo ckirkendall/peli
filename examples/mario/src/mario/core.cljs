@@ -4,7 +4,8 @@
                      Pen draw Collision collide overlap? check-bounds
                      apply-gravity apply-physics collide-action
                      collide-solid remove-body play-sound handle-keys
-                     run-loop schedule-edit check-bounds Game World]]
+                     run-loop schedule-edit check-bounds Game World
+                     run-game]]
             [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
@@ -169,7 +170,19 @@
 ;; GAME WORLD
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  
+
+(def key-actions 
+  {39 {:on-down #(assoc-in % [:bodies 0 :vx] 2)  ;right
+       :on-up #(assoc-in % [:bodies 0 :vx] 0)}
+   37 {:on-down #(assoc-in % [:bodies 0 :vx] -2) ;left
+       :on-up #(assoc-in % [:bodies 0 :vx] 0)}
+   32 {:on-down #(update-in % [:bodies 0 :vy]    ;jump
+                            (fn [vy] (if (= vy 0)
+                                      (do (play-sound "jump") 5)
+                                      vy)))}
+   13 {:on-down #(assoc (remove-body "start" %) :pause? false)}
+   27 {:on-down #(assoc % :pause? true)}})
+
 (def world 
   (World. {:width 1000 :height 400 :img nil :color "#7F7FFF"}
           {:width 400 :height 400 :x 100 :y 0}
@@ -194,36 +207,16 @@
            (Reward. (gensym) 12 16 900 190 )
            (BadGuy. (gensym) 24 24 400 220 -1.5 0)
            (TextBox. "start" 100 50 "Hit Enter" false)]
-          true))
+          key-actions
+          :paused))
 
-(def game (Game. {:world1 world} world {:score 0 :health 3 :lives 10}))
-
-
-(def key-actions 
-  {39 {:on-down #(assoc-in % [:bodies 0 :vx] 2)  ;right
-       :on-up #(assoc-in % [:bodies 0 :vx] 0)}
-   37 {:on-down #(assoc-in % [:bodies 0 :vx] -2) ;left
-       :on-up #(assoc-in % [:bodies 0 :vx] 0)}
-   32 {:on-down #(update-in % [:bodies 0 :vy]    ;jump
-                            (fn [vy] (if (= vy 0)
-                                      (do (play-sound "jump") 5)
-                                      vy)))}
-   13 {:on-down #(assoc (remove-body "start" %) :pause? false)}
-   27 {:on-down #(assoc % :pause? true)}})
-
+(def game (Game. {:world1 world} nil {:score 0 :health 3 :lives 10}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; Setup Game
+;; Run Game
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
   
-(defn run-game [ch]
-  (handle-keys ch key-actions)
-  (let [can (.getElementById js/document "myCanvas")
-        ctx (.getContext can "2d")]
-    (run-loop ch game ctx 0)))
+(def message-bus (run-game game "myCanvas" :world1))
 
-
-(def message-bus (chan 10))
-(run-game message-bus)
