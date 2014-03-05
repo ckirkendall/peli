@@ -123,6 +123,36 @@
 (defn remove-body [id w]
   (assoc w :bodies (vec (filter #(not= id (:id %)) (:bodies w)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; COMMON BUIDLING MATERIALS
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defrecord Block [id fill width height x y radii]
+  Pen
+  (draw [this ctx frame ch state] 
+    (let [{:keys [width height color x y radii]} (translate-coords this frame)
+	      r (+ x width)
+		  b (+ y height)
+		  [ul ur lr ll] (or radii [0 0 0 0])]
+      (if (string? fill)
+        (set! (.-fillStyle ctx) fill)
+        (let [pattern (.createPattern ctx fill, "repeat")]
+          (set! (.-fillStyle ctx) pattern)))
+      (doto ctx
+	    (.beginPath)
+        (.moveTo (+ x ul) y)
+		(.lineTo (- r ur) y)
+		(.quadraticCurveTo r y r (+ y ur))
+		(.lineTo r (- b lr))
+		(.quadraticCurveTo r b (- r lr) b)
+		(.lineTo (+ x ll) b)
+		(.quadraticCurveTo x b x (- b ll))
+		(.lineTo x (+ y ul))
+		(.quadraticCurveTo x y (+ x ul) y)
+        (.closePath)
+        (.fill)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
