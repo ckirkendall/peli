@@ -210,7 +210,7 @@
       
 
 (defn draw-action [ch world state ctx]
-  (if (:pause? world)
+  (if (= (:run-state world) :paused)
     (-> world
         (adjust-frame)
         (draw-world ctx ch state))
