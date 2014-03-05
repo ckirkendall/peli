@@ -27,7 +27,7 @@
 
 (defrecord Block [id fill width height x y radii]
   Pen
-  (draw [this ctx frame ch] 
+  (draw [this ctx frame ch state] 
     (let [{:keys [width height color x y radii]} (translate-coords this frame)
 	      r (+ x width)
 		  b (+ y height)
@@ -52,49 +52,56 @@
 
 (defrecord Reward [id width height x y]
   Pen
-  (draw [this ctx frame ch] 
+  (draw [this ctx frame ch state] 
     (let [{:keys [width height x y] :as obj} (translate-coords this frame)
           img (.getElementById js/document "coin")]
       (.drawImage ctx img x y width height)))
   Physics 
-   (physics [this time-diff board ch]
+   (physics [this time-diff board ch state]
      (apply-physics this 0 board))
   
   Collision
-   (collide [this body ch]
+   (collide [this body ch state]
     (if (= (:state this) :gone) this
       (condp = (type body)
         Hero (collide-action this body 
                {:any #(do 
-                       (play-sound "reward")
-                       (schedule-edit (partial remove-body (:id this)) 
-                                      ch 700)
-                       (schedule-edit
+                        (play-sound "reward")
+                        (put! ch {:action :edit-game
+                                  :fn (fn [g]
+                                        (update-in g [:state :score] inc))})
+                        (schedule-edit (partial remove-body (:id this)) 
+                                       ch 700)
+                        (schedule-edit
                          (fn [w] 
                            (assoc w :bodies 
                                   (conj (:bodies w) this)))
                          ch 5000)
-                       (assoc % :vy 2 :state :gone))})
+                        (assoc % :vy 2 :state :gone))})
         this))))
 
 
 (defrecord Hero [id width height x y vx vy]
    Pen
-  (draw [this ctx frame ch] 
+  (draw [this ctx frame ch state] 
     (let [{:keys [width height x y] :as obj} (translate-coords this frame)
-          img (.getElementById js/document (hero-img this))]
-      (.drawImage ctx img 7 5 19 27 x y width height)))
+          img (.getElementById js/document (hero-img this))] 
+      (.drawImage ctx img 7 5 19 27 x y width height)
+      (set! (.-textBaseline ctx) "middle")
+      (set! (.-font ctx) "12px Arial")
+      (set! (.-fillStyle ctx) "#000099")
+      (.fillText ctx (str "coins: "(:score state)) 20 20)))
   
   Gravity
-  (gravity [this ch]
+  (gravity [this ch state]
      (apply-gravity this))
   
   Physics 
-   (physics [this time-diff board ch]
+   (physics [this time-diff board ch state]
      (apply-physics this 0 board))
   
   Collision 
-   (collide [this body ch] 
+   (collide [this body ch state] 
      (condp = (type body)
        Block (collide-solid this body)
        BadGuy (do
@@ -105,21 +112,21 @@
 
 (defrecord BadGuy [id width height x y vx vy]
   Pen
-  (draw [this ctx frame ch]
+  (draw [this ctx frame ch state]
    (let [{:keys [width height img x y] :as obj} (translate-coords this frame)
           img (.getElementById js/document "goomba")]
       (.drawImage ctx img x y width height)))
   
   Gravity
-  (gravity [this ch]
+  (gravity [this ch state]
      (apply-gravity this))
   
   Physics 
-   (physics [this time-diff board ch]
+   (physics [this time-diff board ch state]
      (apply-physics this 0 board))
   
   Collision
-   (collide [this body ch]
+   (collide [this body ch state]
      (condp = (type body)
        Block (-> this
                (collide-solid body)
@@ -141,16 +148,16 @@
 
 (defrecord TextBox [id width height text hidden?]
   Pen
-  (draw [this ctx frame ch]
+  (draw [this ctx frame ch state]
     (when-not (:hidden? this)
       (let [[x y] [(+ (:x frame) (/ (- (:width frame) width) 2))
                    (+ (:y frame) (/ (- (:height frame) height) 2))]]
-        (set! (.-strokeStyle ctx) "black")
+        (set! (.-strokeStyle ctx) "#000099")
         (set! (.-lineWidth ctx) 2)
         (.strokeRect ctx x y width height)
         (set! (.-textBaseline ctx) "middle")
         (set! (.-font ctx) "12px Arial")
-        (set! (.-fillStyle ctx) "red")
+        (set! (.-fillStyle ctx) "#000099")
         (let [[tx ty] [(+ x (- (/ width 2)
                                (/ (.-width (.measureText ctx text)) 2)))
                        (+ y (/ height 2))]]
@@ -185,7 +192,7 @@
            (Reward. (gensym) 12 16 300 190 )
            (Reward. (gensym) 12 16 500 190 )
            (Reward. (gensym) 12 16 900 190 )
-           (BadGuy. (gensym) 24 24 400 200 -1.5 0)
+           (BadGuy. (gensym) 24 24 400 220 -1.5 0)
            (TextBox. "start" 100 50 "Hit Enter" false)]
           true))
 
