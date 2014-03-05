@@ -4,7 +4,7 @@
                      Pen draw Collision collide overlap? check-bounds
                      apply-gravity apply-physics collide-action
                      collide-solid remove-body play-sound handle-keys
-                     run-loop schedule-edit check-bounds]]
+                     run-loop schedule-edit check-bounds Game World]]
             [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
@@ -78,12 +78,12 @@
         this))))
 
 
-(defrecord Hero [id width height x y vx vy health score]
+(defrecord Hero [id width height x y vx vy]
    Pen
   (draw [this ctx frame ch] 
     (let [{:keys [width height x y] :as obj} (translate-coords this frame)
           img (.getElementById js/document (hero-img this))]
-      (.drawImage ctx img x y width height)))
+      (.drawImage ctx img 7 5 19 27 x y width height)))
   
   Gravity
   (gravity [this ch]
@@ -97,9 +97,10 @@
    (collide [this body ch] 
      (condp = (type body)
        Block (collide-solid this body)
-       BadGuy (collide-action this body {:bottom #(do
-                                                    (play-sound "stomp")
-                                                    (assoc % :vy 5))})
+       BadGuy (do
+                (collide-action this body {:bottom #(do
+                                                      (play-sound "stomp")
+                                                      (assoc % :vy 5))}))
        this)))
 
 (defrecord BadGuy [id width height x y vx vy]
@@ -138,6 +139,23 @@
                    (assoc % :vx 0 :height 2 :state :dead))}))
        this)))
 
+(defrecord TextBox [id width height text hidden?]
+  Pen
+  (draw [this ctx frame ch]
+    (when-not (:hidden? this)
+      (let [[x y] [(+ (:x frame) (/ (- (:width frame) width) 2))
+                   (+ (:y frame) (/ (- (:height frame) height) 2))]]
+        (set! (.-strokeStyle ctx) "black")
+        (set! (.-lineWidth ctx) 2)
+        (.strokeRect ctx x y width height)
+        (set! (.-textBaseline ctx) "middle")
+        (set! (.-font ctx) "12px Arial")
+        (set! (.-fillStyle ctx) "red")
+        (let [[tx ty] [(+ x (- (/ width 2)
+                               (/ (.-width (.measureText ctx text)) 2)))
+                       (+ y (/ height 2))]]
+          (.fillText ctx text tx ty))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -146,30 +164,32 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   
 (def world 
-  {:board {:width 1000 :height 400 :img nil :color "#7F7FFF"}
-   :frame {:width 400 :height 400 :x 100 :y 0}
-   :bodies [(Hero. (gensym) 35 35 100 200 0 0 100 0)
-            (Block. (gensym) "#007F00" 200  100  0 300 [10 10 0 0])
-            (Block. (gensym) "#007F00" 200 100 200 330 [0 0 0 0])
-	    (Block. (gensym) "#007F00" 200 100 400 300 [10 0 0 0])
-            (Block. (gensym) "#007F00" 200 200 600 230 [10 10 0 0])
-            
-	    (Block. (gensym) "#007F00" 100 50 450 250 [10 10 0 0])
-            (Block. (gensym) "#Af8500" 100 24 250 250 [10 10 3 3])
-            
-            (Block. (gensym) "#Af8500" 100 24 350 190 [10 10 3 3])
-            
-            (Block. (gensym) "#007F00" 60 20 100 250 [3 3 3 3])
-            
-            (Block. (gensym) "#007F00" 50 30 105 270 [0 0 0 0])
-            (Block. (gensym) "#007F00" 200 150 800 270 [0 10 0 0])
-            (Reward. (gensym) 12 16 400 120 )
-            (Reward. (gensym) 12 16 300 190 )
-            (Reward. (gensym) 12 16 500 190 )
-            
-            (Reward. (gensym) 12 16 900 190 )
-	    (BadGuy. (gensym) 27 27 400 200 -1.5 0)
-            ]})
+  (World. {:width 1000 :height 400 :img nil :color "#7F7FFF"}
+          {:width 400 :height 400 :x 100 :y 0}
+          [(Hero. (gensym) 19 27 100 200 0 0)
+           (Block. (gensym) "#007F00" 200  100  0 300 [10 10 0 0])
+           (Block. (gensym) "#007F00" 200 100 200 330 [0 0 0 0])
+           (Block. (gensym) "#007F00" 200 100 400 300 [10 0 0 0])
+           (Block. (gensym) "#007F00" 200 200 600 230 [10 10 0 0])
+           
+           (Block. (gensym) "#007F00" 100 50 450 250 [10 10 0 0])
+           (Block. (gensym) "#Af8500" 100 24 250 250 [10 10 3 3])
+           
+           (Block. (gensym) "#Af8500" 100 24 350 190 [10 10 3 3])
+           
+           (Block. (gensym) "#007F00" 60 20 100 250 [3 3 3 3])
+           
+           (Block. (gensym) "#007F00" 50 30 105 270 [0 0 0 0])
+           (Block. (gensym) "#007F00" 200 150 800 270 [0 10 0 0])
+           (Reward. (gensym) 12 16 400 120 )
+           (Reward. (gensym) 12 16 300 190 )
+           (Reward. (gensym) 12 16 500 190 )
+           (Reward. (gensym) 12 16 900 190 )
+           (BadGuy. (gensym) 24 24 400 200 -1.5 0)
+           (TextBox. "start" 100 50 "Hit Enter" false)]
+          true))
+
+(def game (Game. {:world1 world} world {:score 0 :health 3 :lives 10}))
 
 
 (def key-actions 
@@ -180,7 +200,9 @@
    32 {:on-down #(do
                    (play-sound "jump")
                    (update-in % [:bodies 0 :vy]    ;jump
-                            (fn [vy] (if (= vy 0) 5 vy))))}})
+                              (fn [vy] (if (= vy 0) 5 vy))))}
+   13 {:on-down #(assoc (remove-body "start" %) :pause? false)}
+   27 {:on-down #(assoc % :pause? true)}})
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -193,7 +215,7 @@
   (handle-keys ch key-actions)
   (let [can (.getElementById js/document "myCanvas")
         ctx (.getContext can "2d")]
-    (run-loop ch world ctx 0)))
+    (run-loop ch game ctx 0)))
 
 
 (def message-bus (chan 10))
