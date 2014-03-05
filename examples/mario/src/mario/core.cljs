@@ -3,9 +3,9 @@
              :refer [translate-coords Physics physics Gravity gravity 
                      Pen draw Collision collide overlap? check-bounds
                      apply-gravity apply-physics collide-action
-                     collide-solid remove-body play-sound handle-keys
-                     run-loop schedule-edit check-bounds Game World
-                     run-game]]
+                     collide-solid remove-body play-sound run-game
+                     schedule-edit check-bounds Game World
+                     Block run-game]]
             [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
@@ -25,31 +25,6 @@
 ;; BUIDLING MATERIALS
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defrecord Block [id fill width height x y radii]
-  Pen
-  (draw [this ctx frame ch state] 
-    (let [{:keys [width height color x y radii]} (translate-coords this frame)
-	      r (+ x width)
-		  b (+ y height)
-		  [ul ur lr ll] (or radii [0 0 0 0])]
-      (if (string? fill)
-        (set! (.-fillStyle ctx) fill)
-        (let [pattern (.createPattern ctx fill, "repeat")]
-          (set! (.-fillStyle ctx) pattern)))
-      (doto ctx
-	    (.beginPath)
-        (.moveTo (+ x ul) y)
-		(.lineTo (- r ur) y)
-		(.quadraticCurveTo r y r (+ y ur))
-		(.lineTo r (- b lr))
-		(.quadraticCurveTo r b (- r lr) b)
-		(.lineTo (+ x ll) b)
-		(.quadraticCurveTo x b x (- b ll))
-		(.lineTo x (+ y ul))
-		(.quadraticCurveTo x y (+ x ul) y)
-        (.closePath)
-        (.fill)))))
 
 (defrecord Reward [id width height x y]
   Pen
