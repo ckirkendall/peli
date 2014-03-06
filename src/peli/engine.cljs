@@ -163,24 +163,30 @@
 (defn play-sound [id]
   (.play (.getElementById js/document id)))
 
+(defn handle-collision [body bodies ch state]
+  (reduce #(collide %1 %2 ch state) 
+          body (filter #(and (not (identical? body %))
+                                  (overlap? body %))
+                       bodies)))
+
+
 (defn run-physics [world ch state]
   (assoc world :bodies
     (vec
      (for [body (:bodies world)]
-      (-> body
-          (gravity ch state)
-          (physics 0 (:board world) ch state))))))
-
-
-(defn handle-collisions [world ch state]
-  (assoc world :bodies
-    (vec 
-     (for [body (:bodies world)]
-      (reduce #(collide %1 %2 ch state) 
-              body (filter #(and (not (identical? body %))
-                                 (overlap? body %))
-                             (:bodies world)))))))
-
+       (let [{fx :x fy :y  fw :width fh :height} (:frame world)
+             nx (- fx (/ fw 2))
+             nw (* fw 2)
+             ny (- fy (/ fh 2))
+             nh (* fh 2)
+             expanded-frame {:x nx :y ny :width nw :height nh}]
+         (if (overlap? body expanded-frame)
+           (-> body
+               (gravity ch state)
+               (physics 0 (:board world) ch state)
+               (handle-collision (filter #(overlap? % expanded-frame)
+                                         (:bodies world)) ch state))
+           body))))))
 
 
 (defn draw-world [world ctx ch state]
@@ -246,7 +252,6 @@
         (draw-world ctx ch state))
     (-> world
         (run-physics ch state)
-        (handle-collisions ch state)
         (adjust-frame)
         (draw-world ctx ch state))))
 
