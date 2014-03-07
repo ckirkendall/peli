@@ -2,6 +2,7 @@
   (:require [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
+(declare overlap?)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -31,6 +32,8 @@
 (defprotocol Collision 
    (collide [this body ch state]))
 
+(defprotocol Framed 
+  (in-frame? [this frame]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -53,6 +56,10 @@
 (extend-protocol Collision 
    object
    (collide [this body ch state] this))
+
+(extend-protocol Framed 
+   object
+   (in-frame? [this frame] (overlap? this frame)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -103,13 +110,13 @@
         [lx ly] [(+ ox width) (+ oy height)]
         [lx2 ly2] [(+ ox2 w2) (+ oy2 h2)]]
     (cond-> body1
-     (and (< ly oy2) (:bottom actions)) ((:bottom actions)) 
-     (and (< lx ox2) (:right actions)) ((:right actions)) 
-     (and (> oy ly2) (:top actions)) ((:top actions))
-     (and (> ox lx2) (:left actions)) ((:left actions))
+     (and (<= ly oy2) (:bottom actions)) ((:bottom actions)) 
+     (and (<= lx ox2) (:right actions)) ((:right actions)) 
+     (and (>= oy ly2) (:top actions)) ((:top actions))
+     (and (>= ox lx2) (:left actions)) ((:left actions))
      (and (:any actions)
-          (or (< ly oy2) (< lx ox2)
-              (> oy ly2) (> ox lx2))) ((:any actions)))))
+          (or (<= ly oy2) (<= lx ox2)
+              (>= oy ly2) (>= ox lx2))) ((:any actions)))))
 
 
 (defn collide-solid [{:keys [height width x y vx vy] :as body1} 
@@ -120,7 +127,7 @@
      :top #(assoc % :y (+ y2 h2 0.1) :vy 0)
      :left #(assoc % :x (+ x2 w2 0.1))}))
 
-(defn remove-body [id w]
+(defn remove-body [w id]
   (assoc w :bodies (vec (filter #(not= id (:id %)) (:bodies w)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -154,6 +161,27 @@
         (.closePath)
         (.fill)))))
 
+(defrecord TextPrompt [id width height text hidden? options]
+  Pen
+  (draw [this ctx frame ch state]
+    (when-not (:hidden? this)
+      (let [[x y] [(/ (- (:width frame) width) 2)
+                   (/ (- (:height frame) height) 2)]]
+        (set! (.-fillStyle ctx) (get options :background-color "#cfcfcf"))
+        (.fillRect ctx x y width height)
+        (set! (.-strokeStyle ctx) (get options :border-color "#000099"))
+        (set! (.-lineWidth ctx) 2)
+        (.strokeRect ctx x y width height)
+        (set! (.-textBaseline ctx) "middle")
+        (set! (.-font ctx) (get options :font "12px Arial"))
+        (set! (.-fillStyle ctx) (get options :font-color "#000099"))
+        (let [[tx ty] [(+ x (- (/ width 2)
+                               (/ (.-width (.measureText ctx text)) 2)))
+                       (+ y (/ height 2))]]
+          (.fillText ctx text tx ty)))))
+  Framed
+   (in-frame? [this frame] true))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; MAIN ENGINE
@@ -163,12 +191,12 @@
 (defn play-sound [id]
   (.play (.getElementById js/document id)))
 
+
 (defn handle-collision [body bodies ch state]
   (reduce #(collide %1 %2 ch state) 
           body (filter #(and (not (identical? body %))
                                   (overlap? body %))
                        bodies)))
-
 
 (defn run-physics [world ch state]
   (assoc world :bodies
@@ -180,11 +208,11 @@
              ny (- fy (/ fh 2))
              nh (* fh 2)
              expanded-frame {:x nx :y ny :width nw :height nh}]
-         (if (overlap? body expanded-frame)
+         (if (in-frame? body expanded-frame)
            (-> body
                (gravity ch state)
                (physics 0 (:board world) ch state)
-               (handle-collision (filter #(overlap? % expanded-frame)
+               (handle-collision (filter #(in-frame? % expanded-frame)
                                          (:bodies world)) ch state))
            body))))))
 
@@ -194,7 +222,7 @@
   (.fillRect ctx 0 0 (get-in world [:frame :width]) 
                      (get-in world [:frame :height]))
   (doseq [body (:bodies world)]
-    (if (overlap? body (:frame world))
+    (if (in-frame? body (:frame world))
       (draw body ctx (:frame world) ch state)))
   world)
 
@@ -236,8 +264,8 @@
                  (cond-> (:frame world)
                     (< hx tx) (assoc :x (- x (- tx hx)))
                     (> hx lx) (assoc :x (+ x (- hx lx)))
-                    (< hy ty) (assoc :x (- y (- ty hy)))
-                    (> hy ly) (assoc :x (+ y (- hy ly)))))
+                    (< hy ty) (assoc :y (- y (- ty hy)))
+                    (> hy ly) (assoc :y (+ y (- hy ly)))))
         {:keys [x y width height]} (:frame nworld)]
     (assoc nworld :frame
       (assoc (:frame nworld)
@@ -276,7 +304,8 @@
   
   ;;action loop
   (go-loop [g game]
-    (let [msg (<! ch)] 
+    (let [msg (<! ch)]
+      #_(.log js/console (pr-str msg))
       (case (:action msg)
         :draw-world (recur
                      (assoc g
