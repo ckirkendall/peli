@@ -102,7 +102,7 @@
      (apply-physics this 0 board))
   
   Collision
-   (collide [this body ch state]
+  (collide [this body ch state]
      (condp = (type body)
        Block (-> this
                (collide-solid body)
@@ -110,16 +110,16 @@
                   {:left #(assoc % :vx (* (:vx %) -1))
                    :right #(assoc % :vx (* (:vx %) -1))}))
        Hero (if (= (:state this) :dead) this
-              (collide-action this body 
-                {:top 
-                 (fn [b]
-                   (schedule-edit #(remove-body % (:id this)) ch 1000)
-                   (schedule-edit
-                    (fn [w] (assoc w :bodies 
-                              (conj (:bodies w) 
-                                    (assoc this :y (- (:y this) 2)))))
-                    ch 5000)
-                   (assoc b :vx 0 :height 2 :state :dead))}))
+                (collide-action this body 
+                  {:top 
+                   (fn [b]
+                     (schedule-edit #(remove-body % (:id this)) ch 1000)
+                     (schedule-edit
+                      (fn [w] (assoc w :bodies 
+                                    (conj (:bodies w) 
+                                          (assoc this :y (- (:y this) 2)))))
+                      ch 5000)
+                     (assoc b :vx 0 :height 2 :state :dead))}))
        this)))
 
 
