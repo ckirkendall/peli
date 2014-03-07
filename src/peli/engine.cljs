@@ -194,27 +194,27 @@
 
 (defn handle-collision [body bodies ch state]
   (reduce #(collide %1 %2 ch state) 
-          body (filter #(and (not (identical? body %))
+          body (filter #(and (not= (:id body) (:id %))
                                   (overlap? body %))
                        bodies)))
 
 (defn run-physics [world ch state]
-  (assoc world :bodies
-    (vec
-     (for [body (:bodies world)]
-       (let [{fx :x fy :y  fw :width fh :height} (:frame world)
+  (let [{fx :x fy :y  fw :width fh :height} (:frame world)
              nx (- fx (/ fw 2))
              nw (* fw 2)
              ny (- fy (/ fh 2))
              nh (* fh 2)
-             expanded-frame {:x nx :y ny :width nw :height nh}]
-         (if (in-frame? body expanded-frame)
-           (-> body
-               (gravity ch state)
-               (physics 0 (:board world) ch state)
-               (handle-collision (filter #(in-frame? % expanded-frame)
-                                         (:bodies world)) ch state))
-           body))))))
+             expanded-frame {:x nx :y ny :width nw :height nh}
+             nbodies (for [body (:bodies world)]
+                       (if (in-frame? body expanded-frame)
+                         (-> body
+                             (gravity ch state)
+                             (physics 0 (:board world) ch state))
+                         body))]
+    (assoc world :bodies
+           (vec (for [body nbodies]
+                  (handle-collision body (filter #(in-frame? % expanded-frame)
+                                                 nbodies) ch state))))))
 
 
 (defn draw-world [world ctx ch state]
