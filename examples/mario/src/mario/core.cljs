@@ -5,7 +5,7 @@
                      apply-gravity apply-physics collide-action
                      collide-solid remove-body play-sound run-game
                      schedule-edit check-bounds Game World
-                     Block run-game]]
+                     Block TextPrompt run-game]]
             [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
@@ -41,19 +41,19 @@
     (if (= (:state this) :gone) this
       (condp = (type body)
         Hero (collide-action this body 
-               {:any #(do 
+               {:any (fn [b] 
                         (play-sound "reward")
                         (put! ch {:action :edit-game
                                   :fn (fn [g]
                                         (update-in g [:state :score] inc))})
-                        (schedule-edit (partial remove-body (:id this)) 
+                        (schedule-edit #(remove-body % (:id this)) 
                                        ch 700)
                         (schedule-edit
                          (fn [w] 
                            (assoc w :bodies 
                                   (conj (:bodies w) this)))
                          ch 5000)
-                        (assoc % :vy 2 :state :gone))})
+                        (assoc b :vy 2 :state :gone))})
         this))))
 
 
@@ -112,32 +112,16 @@
        Hero (if (= (:state this) :dead) this
               (collide-action this body 
                 {:top 
-                 #(do
-                   (schedule-edit (partial remove-body (:id this)) ch 1000)
+                 (fn [b]
+                   (schedule-edit #(remove-body % (:id this)) ch 1000)
                    (schedule-edit
                     (fn [w] (assoc w :bodies 
                               (conj (:bodies w) 
                                     (assoc this :y (- (:y this) 2)))))
                     ch 5000)
-                   (assoc % :vx 0 :height 2 :state :dead))}))
+                   (assoc b :vx 0 :height 2 :state :dead))}))
        this)))
 
-(defrecord TextBox [id width height text hidden?]
-  Pen
-  (draw [this ctx frame ch state]
-    (when-not (:hidden? this)
-      (let [[x y] [(+ (:x frame) (/ (- (:width frame) width) 2))
-                   (+ (:y frame) (/ (- (:height frame) height) 2))]]
-        (set! (.-strokeStyle ctx) "#000099")
-        (set! (.-lineWidth ctx) 2)
-        (.strokeRect ctx x y width height)
-        (set! (.-textBaseline ctx) "middle")
-        (set! (.-font ctx) "12px Arial")
-        (set! (.-fillStyle ctx) "#000099")
-        (let [[tx ty] [(+ x (- (/ width 2)
-                               (/ (.-width (.measureText ctx text)) 2)))
-                       (+ y (/ height 2))]]
-          (.fillText ctx text tx ty))))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -155,7 +139,7 @@
                             (fn [vy] (if (= vy 0)
                                       (do (play-sound "jump") 5)
                                       vy)))}
-   13 {:on-down #(assoc (remove-body "start" %) :run-state :running)}
+   13 {:on-down #(assoc (remove-body % "start") :run-state :running)}
    27 {:on-down #(assoc % :run-state :paused)}})
 
 (def world 
@@ -181,7 +165,7 @@
            (Reward. (gensym) 12 16 500 190 )
            (Reward. (gensym) 12 16 900 190 )
            (BadGuy. (gensym) 24 24 400 220 -1.5 0)
-           (TextBox. "start" 100 50 "Hit Enter" false)]
+           (TextPrompt. "start" 100 50 "Hit Enter" false {})]
           key-actions
           :paused))
 
