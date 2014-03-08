@@ -252,9 +252,9 @@
 
 
 (defn adjust-frame [world]
-  (let [{:keys [x y width height]} (:frame world)
-        dw (* width .2)
-        dh (* height .2)
+  (let [{:keys [x y width height buffer]} (:frame world)
+        dw (or buffer (* width .2))
+        dh (or buffer (* height .2))
         tx (+ x dw)
         lx (- (+ x width) dw)
         ty (+ y dh)
