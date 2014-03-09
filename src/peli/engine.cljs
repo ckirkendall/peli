@@ -304,8 +304,7 @@
   
   ;;action loop
   (go-loop [g game]
-    (let [msg (<! ch)]
-      #_(.log js/console (pr-str msg))
+    (let [msg (<! ch)] 
       (case (:action msg)
         :draw-world (recur
                      (assoc g
