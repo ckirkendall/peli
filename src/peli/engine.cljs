@@ -284,7 +284,6 @@
         (draw-world ctx ch state))))
 
 
-
 (defn schedule-edit
   ([f ch timing] (schedule-edit f ch timing nil))
   ([f ch timing type]
@@ -292,6 +291,12 @@
        (go (<! (timeout timing))
            (put! ch {:action action :fn f})))))
 
+
+(defn edit-loop [ch type func timing]
+  (go 
+    (while true
+      (<! (timeout timing))
+      (put! ch {:action type :fn func}))))
 
 
 (defn run-loop [ch game ctx world-id]
