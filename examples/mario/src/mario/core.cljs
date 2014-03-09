@@ -19,13 +19,33 @@
    (and (< vx 0) (= vy 0)) "mario-walk-left"
    :else "mario-stand-right"))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; EDIT ACTIONS
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn reward [ch]
+  (fn [body]
+    (play-sound "reward")
+    (schedule-edit #(remove-body % (:id body)) ch 700)
+    (schedule-edit #(assoc % :bodies (conj (:bodies %) body)) ch 5000)
+    (put! ch {:action :edit-game :fn #(update-in % [:state :score] inc)})
+    (assoc body :vy 2 :state :gone)))
+
+(defn kill-bad-guy [ch]
+  (fn [body]
+    (play-sound "stomp")
+    (schedule-edit #(remove-body % (:id body)) ch 1000)
+    (schedule-edit #(assoc % :bodies
+                      (conj (:bodies %) (assoc body :y (- (:y body) 2))))
+                   ch 5000)
+    (assoc body :vx 0 :height 2 :state :dead)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; BUIDLING MATERIALS
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (defrecord Reward [id width height x y]
   Pen
   (draw [this ctx frame ch state] 
@@ -40,27 +60,14 @@
    (collide [this body ch state]
     (if (= (:state this) :gone) this
       (condp = (type body)
-        Hero (collide-action this body 
-               {:any (fn [b] 
-                        (play-sound "reward")
-                        (put! ch {:action :edit-game
-                                  :fn (fn [g]
-                                        (update-in g [:state :score] inc))})
-                        (schedule-edit #(remove-body % (:id this)) 
-                                       ch 700)
-                        (schedule-edit
-                         (fn [w] 
-                           (assoc w :bodies 
-                                  (conj (:bodies w) this)))
-                         ch 5000)
-                        (assoc b :vy 2 :state :gone))})
+        Hero (collide-action this body {:any (reward ch)})
         this))))
 
 
 (defrecord Hero [id width height x y vx vy]
    Pen
   (draw [this ctx frame ch state] 
-    (let [{:keys [width height x y] :as obj} (translate-coords this frame)
+    (let [{:keys [width height x y]} (translate-coords this frame)
           img (.getElementById js/document (hero-img this))] 
       (.drawImage ctx img 7 5 19 27 x y width height)
       (set! (.-textBaseline ctx) "middle")
@@ -80,16 +87,13 @@
    (collide [this body ch state] 
      (condp = (type body)
        Block (collide-solid this body)
-       BadGuy (do
-                (collide-action this body {:bottom #(do
-                                                      (play-sound "stomp")
-                                                      (assoc % :vy 5))}))
+       BadGuy (collide-action this body {:bottom #(assoc % :vy 5)})
        this)))
 
 (defrecord BadGuy [id width height x y vx vy]
   Pen
   (draw [this ctx frame ch state]
-   (let [{:keys [width height img x y] :as obj} (translate-coords this frame)
+   (let [{:keys [width height img x y]} (translate-coords this frame)
           img (.getElementById js/document "goomba")]
       (.drawImage ctx img x y width height)))
   
@@ -107,29 +111,17 @@
        Block (-> this
                (collide-solid body)
                (collide-action body 
-                  {:left #(assoc % :vx (* (:vx %) -1))
-                   :right #(assoc % :vx (* (:vx %) -1))}))
+                 {:left #(assoc % :vx (* (:vx %) -1))
+                  :right #(assoc % :vx (* (:vx %) -1))}))
        Hero (if (= (:state this) :dead) this
-                (collide-action this body 
-                  {:top 
-                   (fn [b]
-                     (schedule-edit #(remove-body % (:id this)) ch 1000)
-                     (schedule-edit
-                      (fn [w] (assoc w :bodies 
-                                    (conj (:bodies w) 
-                                          (assoc this :y (- (:y this) 2)))))
-                      ch 5000)
-                     (assoc b :vx 0 :height 2 :state :dead))}))
+                (collide-action this body {:top (kill-bad-guy ch)}))
        this)))
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; GAME WORLD
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (def key-actions 
   {39 {:on-down #(assoc-in % [:bodies 0 :vx] 2)  ;right
        :on-up #(assoc-in % [:bodies 0 :vx] 0)}
@@ -175,7 +167,6 @@
 ;;
 ;; Run Game
 ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;  
 (def message-bus (run-game game "myCanvas" :world1))
 
