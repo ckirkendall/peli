@@ -42,7 +42,7 @@
                              (update-in [:frame] #(assoc % :x 0 :y 0))
                              (assoc :bodies (create-objects "Game Over"))
                              (assoc :run-state :paused)))
-                       ch 1))})
+                       ch 10))})
        this)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -70,7 +70,7 @@
                       (vec (filter #(> (+ (:x %) (:width %))
                                        (:x (:frame w)))
                                    (:bodies w))))
-                    (:bodies w)))}))))
+               w))}))))
 
 (defn extend-board [ch]
   (go
@@ -79,7 +79,6 @@
      (put! ch
            {:action :edit-world
             :fn (fn [w]
-                  (.log js/console "ADDING A GATE")
                   (if (= (:run-state w) :running)
                     (update-in w [:bodies] #(create-gate %))
                     (:bodies w)))}))))
@@ -95,7 +94,6 @@
   {32 {:on-down #(assoc-in % [:bodies 0 :vy] 4)}
    13 {:on-down #(-> %
                      (remove-body :start)
-                     (remove-body :game-over)
                      (assoc :run-state :running))}
    27 {:on-down #(assoc % :run-state :paused)}
    80 {:on-down #(do (println %) %)}})
