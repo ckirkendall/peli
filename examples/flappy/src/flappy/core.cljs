@@ -8,7 +8,7 @@
             [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
-(declare create-objects)
+(declare create-objects ScoreGate)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Edit Actions
@@ -34,13 +34,16 @@
             end (+ start 100)]
         (conj (:bodies world)
           (Block. (gensym) "#007F00" 50 start x 0 [0 0 5 5])
-          (Block. (gensym) "#007F00" 50 (- 400 end) x end [5 5 0 0]))))))
+          (Block. (gensym) "#007F00" 50 (- 400 end) x end [5 5 0 0])
+          (ScoreGate. (gensym) 10 100 (+ x 25) start))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; BUILDING MATERIALS
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defrecord ScoreGate [id width height x y])
 
 (defrecord Bird [id width height x y vx vy]
    Pen
@@ -61,8 +64,22 @@
    (collide [this body ch state] 
      (condp = (type body)
        Block (collide-action this body 
-              {:any (fn [b] (schedule-edit game-over ch 10) b)})
+               {:any (fn [b] (schedule-edit game-over ch 10) b)})
+       ScoreGate (do
+                   (put! ch {:action :edit-world
+                             :fn #(remove-body % (:id body))})
+                   (put! ch {:action :edit-game
+                             :fn #(update-in % [:state :score] inc)})
+                   this)
        this)))
+
+(defrecord ScoreOverlay []
+  Pen
+  (draw [this ctx frame ch state]
+    (set! (.-textBaseline ctx) "middle")
+    (set! (.-font ctx)  "12px Arial")
+    (set! (.-fillStyle ctx) "#000099") 
+    (.fillText ctx (str "score: " (:score state)) 20 20)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -74,7 +91,8 @@
   [(Bird. (gensym) 22 18 100 200 2 0)
    (TextPrompt. :start 100 50 text false {})
    (Block. (gensym) "#007F00" 50 100 300 0 [0 0 5 5])
-   (Block. (gensym) "#007F00" 50 200 300 200 [5 5 0 0])])
+   (Block. (gensym) "#007F00" 50 200 300 200 [5 5 0 0])
+   (ScoreGate. (gensym) 10 100 325 100)])
 
 (def key-actions 
   {32 {:on-down #(assoc-in % [:bodies 0 :vy] 4)}
@@ -88,6 +106,7 @@
   (World. {:width 20000 :height 400 :img nil :color "#7F7FFF"}
           {:width 400 :height 400 :x 0 :y 0 :buffer 130}
           (create-objects "Hit Enter")
+          [(ScoreOverlay.)]
           key-actions
           :paused))
 
