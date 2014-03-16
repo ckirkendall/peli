@@ -10,7 +10,7 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defrecord World [board frame bodies key-actions run-state])
+(defrecord World [board frame bodies overlays key-actions run-state])
 
 (defrecord Game [worlds active-world state])
 
@@ -224,6 +224,8 @@
   (doseq [body (:bodies world)]
     (if (in-frame? body (:frame world))
       (draw body ctx (:frame world) ch state)))
+  (doseq [overlay (:overlays world)]
+    (draw overlay ctx (:frame world) ch state))
   world)
 
 
