@@ -158,6 +158,7 @@
            (Reward. (gensym) 12 16 900 190 )
            (BadGuy. (gensym) 24 24 400 220 -1.5 0)
            (TextPrompt. "start" 100 50 "Hit Enter" false {})]
+          []
           key-actions
           :paused))
 
