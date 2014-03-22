@@ -3,9 +3,10 @@
              :refer [translate-coords Physics physics Gravity gravity 
                      Pen draw Collision collide overlap? check-bounds
                      apply-gravity apply-physics collide-action
-                     collide-solid remove-body play-sound run-game
-                     schedule-edit check-bounds Game World
-                     Block TextPrompt run-game]]
+                     collide-solid remove-body remove-overlay
+                     play-sound run-game schedule-edit check-bounds
+                     Game World Block TextPrompt run-game Framed
+                     adjust-frame?]]
             [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
@@ -88,7 +89,10 @@
      (condp = (type body)
        Block (collide-solid this body)
        BadGuy (collide-action this body {:bottom #(assoc % :vy 5)})
-       this)))
+       this))
+
+   Framed
+    (adjust-frame? [this] true))
 
 (defrecord BadGuy [id width height x y vx vy]
   Pen
@@ -131,8 +135,10 @@
                             (fn [vy] (if (= vy 0)
                                       (do (play-sound "jump") 5)
                                       vy)))}
-   13 {:on-down #(assoc (remove-body % "start") :run-state :running)}
+   13 {:on-down #(assoc (remove-overlay % "start") :run-state :running)}
    27 {:on-down #(assoc % :run-state :paused)}})
+
+
 
 (def world 
   (World. {:width 1000 :height 400 :img nil :color "#7F7FFF"}
@@ -156,9 +162,8 @@
            (Reward. (gensym) 12 16 300 190 )
            (Reward. (gensym) 12 16 500 190 )
            (Reward. (gensym) 12 16 900 190 )
-           (BadGuy. (gensym) 24 24 400 220 -1.5 0)
-           (TextPrompt. "start" 100 50 "Hit Enter" false {})]
-          []
+           (BadGuy. (gensym) 24 24 400 220 -1.5 0)]
+          [(TextPrompt. "start" 100 50 "Hit Enter" false {})]
           key-actions
           :paused))
 
