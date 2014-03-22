@@ -33,7 +33,7 @@
    (collide [this body ch state]))
 
 (defprotocol Framed 
-  (in-frame? [this frame]))
+  (adjust-frame? [this]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -59,7 +59,7 @@
 
 (extend-protocol Framed 
    object
-   (in-frame? [this frame] (overlap? this frame)))
+   (adjust-frame? [this] false))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -127,8 +127,12 @@
      :top #(assoc % :y (+ y2 h2 0.1) :vy 0)
      :left #(assoc % :x (+ x2 w2 0.1))}))
 
-(defn remove-body [w id]
-  (assoc w :bodies (vec (filter #(not= id (:id %)) (:bodies w)))))
+(defn remove-item [w type id]
+  (assoc w type (vec (filter #(not= id (:id %)) (type w)))))
+
+(defn remove-body [w id] (remove-item w :bodies id))
+
+(defn remove-overlay [w id] (remove-item w :overlays id))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -178,9 +182,7 @@
         (let [[tx ty] [(+ x (- (/ width 2)
                                (/ (.-width (.measureText ctx text)) 2)))
                        (+ y (/ height 2))]]
-          (.fillText ctx text tx ty)))))
-  Framed
-   (in-frame? [this frame] true))
+          (.fillText ctx text tx ty))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -206,14 +208,14 @@
              nh (* fh 2)
              expanded-frame {:x nx :y ny :width nw :height nh}
              nbodies (for [body (:bodies world)]
-                       (if (in-frame? body expanded-frame)
+                       (if (overlap? body expanded-frame)
                          (-> body
                              (gravity ch state)
                              (physics 0 (:board world) ch state))
                          body))]
     (assoc world :bodies
            (vec (for [body nbodies]
-                  (handle-collision body (filter #(in-frame? % expanded-frame)
+                  (handle-collision body (filter #(overlap? % expanded-frame)
                                                  nbodies) ch state))))))
 
 
@@ -222,7 +224,7 @@
   (.fillRect ctx 0 0 (get-in world [:frame :width]) 
                      (get-in world [:frame :height]))
   (doseq [body (:bodies world)]
-    (if (in-frame? body (:frame world))
+    (if (overlap? body (:frame world))
       (draw body ctx (:frame world) ch state)))
   (doseq [overlay (:overlays world)]
     (draw overlay ctx (:frame world) ch state))
@@ -261,7 +263,7 @@
         lx (- (+ x width) dw)
         ty (+ y dh)
         ly (- (+ y height) dh)
-        {hx :x hy :y} (get-in world [:bodies 0])
+        {hx :x hy :y} (first (filter adjust-frame? (:bodies world)))
         nworld (assoc world :frame
                  (cond-> (:frame world)
                     (< hx tx) (assoc :x (- x (- tx hx)))
