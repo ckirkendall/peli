@@ -4,21 +4,24 @@
                      Pen draw Collision collide apply-gravity
                      apply-physics collide-action collide-solid
                      remove-body play-sound schedule-edit Game World
-                     Block TextPrompt run-game edit-loop]]
+                     Block TextPrompt run-game edit-loop remove-overlay
+                     Framed adjust-frame?]]
             [cljs.core.async :refer (timeout put! chan)])
   (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
 
-(declare create-objects ScoreGate)
+(declare overlays bodies ScoreGate)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Edit Actions
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn game-over [world]
-  (-> world
-      (update-in [:frame] #(assoc % :x 0 :y 0))
-      (assoc :bodies (create-objects "Game Over"))
-      (assoc :run-state :paused)))
+(defn game-over [game]
+  (-> game
+      (assoc-in [:state :score] 0)
+      (update-in [:active-world :frame] #(assoc % :x 0 :y 0))
+      (assoc-in [:active-world :bodies] bodies)
+      (assoc-in [:active-world :overlays] overlays)
+      (assoc-in [:active-world :run-state] :paused)))
 
 (defn cleanup-gate [world]
   (if (= (:run-state world) :paused) world
@@ -64,16 +67,20 @@
    (collide [this body ch state] 
      (condp = (type body)
        Block (collide-action this body 
-               {:any (fn [b] (schedule-edit game-over ch 10) b)})
+              {:any (fn [b]
+                      (schedule-edit game-over ch 10 :edit-game) b)})
        ScoreGate (do
                    (put! ch {:action :edit-world
                              :fn #(remove-body % (:id body))})
                    (put! ch {:action :edit-game
                              :fn #(update-in % [:state :score] inc)})
                    this)
-       this)))
+       this))
 
-(defrecord ScoreOverlay []
+   Framed
+    (adjust-frame? [this] true))
+
+(defrecord ScoreOverlay [id] 
   Pen
   (draw [this ctx frame ch state]
     (set! (.-textBaseline ctx) "middle")
@@ -87,17 +94,19 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn create-objects [text]
+(def bodies
   [(Bird. (gensym) 22 18 100 200 2 0)
-   (TextPrompt. :start 100 50 text false {})
    (Block. (gensym) "#007F00" 50 100 300 0 [0 0 5 5])
    (Block. (gensym) "#007F00" 50 200 300 200 [5 5 0 0])
    (ScoreGate. (gensym) 10 100 325 100)])
 
+(def overlays [(ScoreOverlay. :score)
+               (TextPrompt. :start 100 50 "Hit Enter" false {})])
+
 (def key-actions 
   {32 {:on-down #(assoc-in % [:bodies 0 :vy] 4)}
    13 {:on-down #(-> %
-                     (remove-body :start)
+                     (remove-overlay :start)
                      (assoc :run-state :running))}
    27 {:on-down #(assoc % :run-state :paused)}
    80 {:on-down #(do (println %) %)}})
@@ -105,8 +114,8 @@
 (def world 
   (World. {:width 20000 :height 400 :img nil :color "#7F7FFF"}
           {:width 400 :height 400 :x 0 :y 0 :buffer 130}
-          (create-objects "Hit Enter")
-          [(ScoreOverlay.)]
+          bodies
+          overlays
           key-actions
           :paused))
 
