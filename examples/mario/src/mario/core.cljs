@@ -1,6 +1,6 @@
 (ns mario.core
-  (:require [peli.engine 
-             :refer [translate-coords Physics physics Gravity gravity 
+  (:require [peli.engine
+             :refer [translate-coords Physics physics Gravity gravity
                      Pen draw Collision collide overlap? check-bounds
                      apply-gravity apply-physics collide-action
                      collide-solid remove-body remove-overlay
@@ -49,14 +49,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord Reward [id width height x y]
   Pen
-  (draw [this ctx frame ch state] 
+  (draw [this ctx frame ch state]
     (let [{:keys [width height x y] :as obj} (translate-coords this frame)
           img (.getElementById js/document "coin")]
       (.drawImage ctx img x y width height)))
-  Physics 
+  Physics
    (physics [this time-diff board ch state]
      (apply-physics this 0 board))
-  
+
   Collision
    (collide [this body ch state]
     (if (= (:state this) :gone) this
@@ -67,25 +67,27 @@
 
 (defrecord Hero [id width height x y vx vy]
    Pen
-  (draw [this ctx frame ch state] 
-    (let [{:keys [width height x y]} (translate-coords this frame)
-          img (.getElementById js/document (hero-img this))] 
+  (draw [this frame ch state]
+    [:g [:rect {:x x :y y :width width :height height
+                :style {:fill "url(#hero)"}}]]
+
+    (let [img (.getElementById js/document (hero-img this))]
       (.drawImage ctx img 7 5 19 27 x y width height)
       (set! (.-textBaseline ctx) "middle")
       (set! (.-font ctx) "12px Arial")
       (set! (.-fillStyle ctx) "#000099")
       (.fillText ctx (str "coins: "(:score state)) 20 20)))
-  
+
   Gravity
   (gravity [this ch state]
      (apply-gravity this))
-  
-  Physics 
+
+  Physics
    (physics [this time-diff board ch state]
      (apply-physics this 0 board))
-  
-  Collision 
-   (collide [this body ch state] 
+
+  Collision
+   (collide [this body ch state]
      (condp = (type body)
        Block (collide-solid this body)
        BadGuy (collide-action this body {:bottom #(assoc % :vy 5)})
@@ -96,25 +98,24 @@
 
 (defrecord BadGuy [id width height x y vx vy]
   Pen
-  (draw [this ctx frame ch state]
-   (let [{:keys [width height img x y]} (translate-coords this frame)
-          img (.getElementById js/document "goomba")]
-      (.drawImage ctx img x y width height)))
-  
+  (draw [this frame ch state]
+    [:rect {:x x :y y :width width :height height
+            :style {:fill "url(#goomba)"}}])
+
   Gravity
   (gravity [this ch state]
      (apply-gravity this))
-  
-  Physics 
+
+  Physics
    (physics [this time-diff board ch state]
      (apply-physics this 0 board))
-  
+
   Collision
   (collide [this body ch state]
      (condp = (type body)
        Block (-> this
                (collide-solid body)
-               (collide-action body 
+               (collide-action body
                  {:left #(assoc % :vx (* (:vx %) -1))
                   :right #(assoc % :vx (* (:vx %) -1))}))
        Hero (if (= (:state this) :dead) this
@@ -126,7 +127,7 @@
 ;; GAME WORLD
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def key-actions 
+(def key-actions
   {39 {:on-down #(assoc-in % [:bodies 0 :vx] 2)  ;right
        :on-up #(assoc-in % [:bodies 0 :vx] 0)}
    37 {:on-down #(assoc-in % [:bodies 0 :vx] -2) ;left
@@ -140,29 +141,34 @@
 
 
 
-(def world 
+(def world
   (World. {:width 1000 :height 400 :img nil :color "#7F7FFF"}
           {:width 400 :height 400 :x 100 :y 0}
-          [(Hero. (gensym) 19 27 100 200 0 0)
-           (Block. (gensym) "#007F00" 200  100  0 300 [10 10 0 0])
-           (Block. (gensym) "#007F00" 200 100 200 330 [0 0 0 0])
-           (Block. (gensym) "#007F00" 200 100 400 300 [10 0 0 0])
-           (Block. (gensym) "#007F00" 200 200 600 230 [10 10 0 0])
-           
-           (Block. (gensym) "#007F00" 100 50 450 250 [10 10 0 0])
-           (Block. (gensym) "#Af8500" 100 24 250 250 [10 10 3 3])
-           
-           (Block. (gensym) "#Af8500" 100 24 350 190 [10 10 3 3])
-           
-           (Block. (gensym) "#007F00" 60 20 100 250 [3 3 3 3])
-           
-           (Block. (gensym) "#007F00" 50 30 105 270 [0 0 0 0])
-           (Block. (gensym) "#007F00" 200 150 800 270 [0 10 0 0])
-           (Reward. (gensym) 12 16 400 120 )
-           (Reward. (gensym) 12 16 300 190 )
-           (Reward. (gensym) 12 16 500 190 )
-           (Reward. (gensym) 12 16 900 190 )
-           (BadGuy. (gensym) 24 24 400 220 -1.5 0)]
+          [:b1 :b2 :b3 :b4 :b4 :b6 :b7 :b8 :b9 :b10 :r1 :r2 :r3 :r4]
+          [:hero :bad1]
+          (into {}
+                (map (fn [item]
+                       [(:id item) item])
+                  [(Hero. :hero 19 27 100 200 0 0)
+                   (Block. :b1 "#007F00" 200  100  0 300 [10 10 0 0])
+                   (Block. :b2 "#007F00" 200 100 200 330 [0 0 0 0])
+                   (Block. :b3 "#007F00" 200 100 400 300 [10 0 0 0])
+                   (Block. :b4 "#007F00" 200 200 600 230 [10 10 0 0])
+
+                   (Block. :b5 "#007F00" 100 50 450 250 [10 10 0 0])
+                   (Block. :b6 "#Af8500" 100 24 250 250 [10 10 3 3])
+
+                   (Block. :b7 "#Af8500" 100 24 350 190 [10 10 3 3])
+
+                   (Block. :b8 "#007F00" 60 20 100 250 [3 3 3 3])
+
+                   (Block. :b9 "#007F00" 50 30 105 270 [0 0 0 0])
+                   (Block. :b10 "#007F00" 200 150 800 270 [0 10 0 0])
+                   (Reward. :r1 12 16 400 120 )
+                   (Reward. :r2 12 16 300 190 )
+                   (Reward. :r3 12 16 500 190 )
+                   (Reward. :r4 12 16 900 190 )
+                   (BadGuy. :bad1 24 24 400 220 -1.5 0)]))
           [(TextPrompt. "start" 100 50 "Hit Enter" false {})]
           key-actions
           :paused))
@@ -173,6 +179,5 @@
 ;;
 ;; Run Game
 ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (def message-bus (run-game game "myCanvas" :world1))
-
