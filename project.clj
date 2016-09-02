@@ -2,19 +2,19 @@
   :description "simple 2d game engine"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/clojurescript "1.7.145" :scope "provided"]
-                 [cljsjs/react "0.14.0-0"]
-                 [reagent "0.5.1" :excludes [cljsjs/react]]
+  :dependencies [[org.clojure/clojure "1.8.0"]
+                 [org.clojure/clojurescript "1.9.227" :scope "provided"]
+                 [cljsjs/react "15.3.1-0"]
+                 [re-frame "0.8.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                 [devcards "0.2.0-8"]]
+                 [devcards "0.2.1-7"]]
 
   :source-paths ["src"]
   :test-paths ["test"]
   :doo {:build "test"}
-  :profiles {:dev {:plugins [[lein-cljsbuild "1.1.0"]
-                             [lein-figwheel "0.4.1"]
-                             [lein-doo "0.1.6-SNAPSHOT"]]
+  :profiles {:dev {:plugins [[lein-cljsbuild "1.1.4"]
+                             [lein-figwheel "0.5.6"]
+                             [lein-doo "0.1.7"]]
                    :resource-paths ["dev/resources"]
                    :figwheel {:css-dirs ["dev/resources/public/css"]
                               :server-port 3450}

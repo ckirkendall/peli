@@ -2,11 +2,13 @@
   (:require-macros
    [cljs.core.async.macros :refer (go go-loop)])
   (:require
-   [cljs.core.async :refer (timeout put! chan)]
+   [re-frame.core :as re-frame]
+   [cljs.core.async :refer [timeout]]
    [reagent.core :as reagent :refer [atom]]
    [clojure.set :as s]
    [clojure.data :refer [diff]]
    [cljs.pprint :refer [pprint]]))
+
 
 (enable-console-print!)
 (declare send-action)
@@ -21,69 +23,39 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defn pause-game [game] (re-frame/dispatch [:peli/pause]))
+(defn unpause-game [game] (re-frame/dispatch [:peli/unpause]))
 
-(defprotocol IGame
-  (-run-state [this])
-  (-pause-game [this])
-  (-unpause-game [this])
-  (-fps [this])
-  (-sprites [this])
-  (-sounds [game])
-  (-frame [this])
-  (-board [this])
-  (-block-size [this])
-  (-state [this])
-  (-solids [this])
-  (-charaters [this])
-  (-entity [this id])
-  (-worlds [this])
-  (-world [this id])
-  (-overlays [this])
-  (-framed-character [this])
-  (-key-actions [this world-id])
-  (-update-frame [this func])
-  (-update-state [this func])
-  (-collision-matrix [this])
-  (-set-collision-matrix [this matrix])
-  (-switch-worlds [this world-id])
-  (-update-entity [this id func])
-  (-hide-entity [this id])
-  (-show-entity [this id])
-  (-init-world [this])
-  (-step [this ch])
-  (-initial-draw [this ch target-id])
-  (-debug [this]))
+;;pure functions
+(defn run-state [game] (get-in game [:active-world :run-state]))
+(defn fps [game] (get game :fps 60))
+(defn sprites [game] (get-in game [:active-world :sprites]))
+(defn sounds [game] (get-in game [:active-world :sounds]))
+(defn frame [game] (get-in game [:active-world :frame]))
+(defn board [game] (get-in game [:active-world :board]))
+(defn block-size [game] (get game :block-size 50))
 
-(defn run-state [game] (-run-state game))
-(defn pause-game [game] (-pause-game game))
-(defn unpause-game [game] (-unpause-game game))
-(defn fps [game] (-fps game))
-(defn sprites [game] (-sprites game))
-(defn sounds [game] (-sounds game))
-(defn frame [game] (-frame game))
-(defn board [game] (-board game))
-(defn block-size [game] (-block-size game))
-(defn state [game] (-state game))
-(defn solids [game] (-solids game))
-(defn characters [game] (-charaters game))
-(defn entity [game id] (-entity game id))
-(defn worlds [game] (-worlds game))
-(defn world [game id] (-world game id))
-(defn overlays [game] (-overlays game))
-(defn- framed-character [game] (-framed-character game))
-(defn- update-frame [game func] (-update-frame game func))
-(defn- collision-matrix [game] (-collision-matrix game))
-(defn- set-collision-matrix [game matrix] (-set-collision-matrix game matrix))
-(defn- update-state [game func] (-update-state game func))
-(defn- switch-worlds [game world-id] (-switch-worlds game world-id))
-(defn- update-entity [game id func] (-update-entity game id func))
-(defn- hide-entity [game id] (-hide-entity game id))
-(defn- show-entity [game id] (-show-entity game id))
-(defn- init-world [game] (-init-world game))
-(defn- step [game ch] (-step game ch))
-(defn- key-actions [game world-id] (-key-actions game world-id))
-(defn- initial-draw [game ch target-id] (-initial-draw game ch target-id))
-(defn debug [game] (-debug game))
+(defn state [game] (get game :state))
+(defn solids [game] (get-in game [:active-world :solids]))
+(defn characters [game] (get-in game [:active-world :characters]))
+(defn entity [game id] (get-in game [:active-world :registry id]))
+(defn worlds [game] (get game :worlds))
+(defn world [game id] (get-in game [:worlds id]))
+(defn overlays [game] (get-in game [:active-world :overlays]))
+(defn- framed-character [game] (entity game (get-in game [:active-world :framed])))
+(defn- update-frame [game func] (update-in game [:active-world :frame] func))
+(defn- collision-matrix [game] (get game :collision-matrix))
+
+(defn- set-collision-matrix [game matrix] (assoc game :collision-matrix matrix))
+
+(defn- update-entity [game id func]
+  (update-in game [:active-world :registry id] func))
+
+(defn- key-actions [game world-id] (get-in game [:active-world :key-actions]))
+
+(defn- switch-worlds [game world-id]
+  (let [world (get-in game [:worlds world-id])]
+    (assoc game :active-world world)))
 
 
 (defrecord World [board
@@ -107,16 +79,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defprotocol Gravity
-  (gravity [this game ch]))
+  (gravity [this game]))
 
 (defprotocol Physics
-  (physics [this time-diff game ch]))
+  (physics [this time-diff game]))
 
 (defprotocol Pen
-   (draw [this game ch]))
+   (draw [this game]))
 
 (defprotocol Collision
-   (collide [this body game ch]))
+   (collide [this body game]))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -127,19 +99,19 @@
 
 (extend-protocol Physics
    object
-   (physics [this time-diff game ch] this))
+   (physics [this time-diff game] this))
 
 (extend-protocol Gravity
    object
-   (gravity [this game ch] this))
+   (gravity [this game] this))
 
 (extend-protocol Pen
    object
-   (draw [this game ch] this))
+   (draw [this game] this))
 
 (extend-protocol Collision
    object
-   (collide [this body ch game] this))
+   (collide [this body game] this))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -287,9 +259,6 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn play-sound [id]
-  (.play (.getElementById js/document id)))
-
 
 (defn replace-entities [game chars]
   (reduce (fn [g char]
@@ -298,16 +267,16 @@
           chars))
 
 
-(defn handle-collision [ch game pair]
+(defn handle-collision [game pair]
   (let [[b1 b2] (map (partial entity game) pair)]
      (if (overlap? b1 b2)
        (replace-entities game
-                         [(collide b1 b2 game ch)
-                          (collide b2 b1 game ch)])
+                         [(collide b1 b2 game)
+                          (collide b2 b1 game)])
        game)))
 
 
-(defn run-physics [game ch]
+(defn run-physics [game]
   (let [{fx :x fy :y  fw :width fh :height} (frame game)
         nx (- fx (/ fw 2))
         nw (* fw 2)
@@ -319,8 +288,9 @@
                        (filter #(and (overlap? % expanded-frame)
                                      (not (:hidden %))))
                        (map #(-> %
-                                 (gravity game ch)
-                                 (physics nil game ch)))) ;;TODO - timediff
+                                 (gravity game)
+                                 (physics nil game)))) ;;TODO -timediff
+        start-matrix (collision-matrix game)
         coll-matrix (add-items-to-matrix (collision-matrix game)
                                          (block-size game)
                                          nbodies)
@@ -328,7 +298,7 @@
         pairs (generate-collision-list coll-matrix
                                        (block-size game)
                                        expanded-frame)]
-    (reduce (partial handle-collision ch)
+    (reduce handle-collision
             new-game
             pairs)))
 
@@ -344,19 +314,19 @@
   (fn [code] (get-in actions [code key])))
 
 ;;{:on-down {key-code [{:action :key :data ;;}}]
-(defn handle-keys [ch actions]
+(defn handle-keys [actions]
   (let [on-down (code->action actions :on-down)
         on-up (code->action actions :on-up)]
     (set! (.-onkeydown js/document)
        #(let [code (get-key-code %)]
-          (if (on-down code)
+          (when (on-down code)
             (doseq [action (on-down code)]
-              (apply send-action ch action)))))
+              (action)))))
     (set! (.-onkeyup js/document)
        #(let [code (get-key-code %)]
-          (if (on-up code)
+          (when (on-up code)
             (doseq [action (on-up code)]
-              (apply send-action ch action)))))))
+              (action)))))))
 
 
 
@@ -383,80 +353,37 @@
 ;; ---------------------------------------------------------------------
 ;; Action Methods
 
-(defn send-action [ch action & args]
-  (when (or (not @debug-flag)
-            (= action :debug))
-    (put! ch {:action action :args args})))
-
-(defn schedule-action [ch timing action & args]
+(defn schedule-action [timing action]
   (go (<! (timeout timing))
-      (apply send-action ch action args)))
+      (re-frame/dispatch action)))
 
-(defn edit-loop [ch timing action & args]
+(defn interval-action [timing action]
   (go
     (while true
       (<! (timeout timing))
-      (apply send-action ch action args))))
+      (re-frame/dispatch action))))
 
 
 ;; ---------------------------------------------------------------------
 ;; Main Setup
 
-(defn- set-world [game ch world-id]
+(defn- set-world [game world-id]
   (let [world (world game world-id)
         new-game (switch-worlds game world-id)
         matrix (init-collision-matrix new-game)
-        k-actions (key-actions game world-id)]
+        k-actions (key-actions new-game world-id)]
     (when k-actions
-      (handle-keys ch k-actions))
+      (handle-keys k-actions))
     (set-collision-matrix new-game matrix)))
-
-(defn restor-entity [game ])
-
-(defn run-loop [ch game debug-ch]
-  ;; FPS
-  (go
-    (while true
-     (<! (timeout (/ 1000 (fps game))))
-     (send-action ch :step)))
-
-  ;;action loop
-  (go-loop [game game]
-    (when-let [msg (<! ch)]
-      (when-not (= (:action msg) :quit)
-        (let [new-game
-              (case (:action msg)
-                :step (step game ch)
-                :update-entity (apply update-entity game (:args msg))
-                :update-state (apply update-state game (:args msg))
-                :show (apply show-entity game (:args msg))
-                :hide (apply hide-entity game (:args msg))
-                :pause (pause-game game)
-                :unpause (unpause-game game)
-                :debug (do
-                         (swap! debug-flag not)
-                         (println "debug:" (pr-str debug-flag))
-                         (debug game))
-                :switch-world (apply set-world game ch (:args msg)))]
-          (when debug-ch
-            (put! debug-ch {:event msg :state game}))
-          (recur new-game))))))
-
 
 (defn init-game
   ([game world-id]
    (init-game game world-id false))
   ([game world-id debug]
-   (let [event-ch (chan)
-         debug-ch (when debug (chan))
-         game (set-world game event-ch world-id)]
-     (run-loop event-ch game debug-ch)
-     {:event-ch event-ch
-      :debug-ch debug-ch
-      :game game})))
+   (let [game (set-world game world-id)]
+     (re-frame/dispatch [:peli/reset-game game])
+     (interval-action (:fps game 17) [:peli/step]))))
 
-(defn render-game [{:keys [game event-ch] :as x} target-id]
-  (initial-draw game event-ch target-id))
 
 (comment
   ;; WORLD

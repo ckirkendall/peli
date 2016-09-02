@@ -1,9 +1,10 @@
 (ns peli.play
-  (:require [peli.svg-adaptor :as svg]
+  (:require [re-frame.core :as re-frame]
+            [reagent.core :as reagent]
+            [peli.svg-adaptor :as svg]
             [peli.engine :as peli]
-            [peli.time-debugger :as debugger]
-            [cljs.core.async :refer (timeout put! chan)])
-  (:require-macros [cljs.core.async.macros :refer (go go-loop)]))
+            [peli.core :refer [run-game]]
+            [peli.time-debugger :as debugger]))
 
 
 (declare Hero BadGuy)
@@ -21,19 +22,19 @@
 ;; EDIT ACTIONS
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn reward [ch]
+(defn reward []
   (fn [{:keys [id] :as body}]
-    (peli/play-sound "reward")
-    (peli/schedule-action ch 700 :hide id)
-    #_(peli/schedule-action ch 5000 :show id)
-    (peli/send-action ch :update-state #(update % :score inc))
+    (svg/play-sound "reward")
+    (peli/schedule-action 700 [:peli/hide id])
+    #_(peli/schedule-action 5000 [:peli/show id])
+    (re-frame/dispatch [:peli/update-state #(update % :score inc)])
     (assoc body :vy 2 :state :gone)))
 
-(defn kill-bad-guy [ch]
+(defn kill-bad-guy []
   (fn [{:keys [id] :as body}]
-    (peli/play-sound "stomp")
-    (peli/schedule-action ch 500 :hide id)
-    (peli/schedule-action ch 10 :update-entity id #(assoc % :y (- (:y body) 2)))
+    (svg/play-sound "stomp")
+    (peli/schedule-action 500 [:peli/hide id])
+    (peli/schedule-action 10 [:peli/update-entity id #(assoc % :y (- (:y body) 2))])
     (assoc body :vx 0 :height 10 :state :dead)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -43,25 +44,25 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord Reward [id width height x y]
   peli/Pen
-  (draw [this game ch]
+  (draw [this game]
     (let [img (.getElementById js/document "coin")]
        [:rect {:x x :y y :width width :height height
                :style {:fill "url(#coin)"}}]))
   peli/Physics
-   (physics [this time-diff game ch]
+    (physics [this time-diff game]
      (peli/apply-physics this game))
 
   peli/Collision
-   (collide [this body game ch]
+   (collide [this body game]
     (if (= (:state this) :gone) this
       (condp = (type body)
-        Hero (peli/collide-action this body {:any (reward ch)})
+        Hero (peli/collide-action this body {:any (reward)})
         this))))
 
 
 (defrecord Hero [id width height x y vx vy]
   peli/Pen
-  (draw [this game ch]
+  (draw [this game]
     [:g [:rect {:x x :y y :width width :height height
                 :style {:fill (str "url(#" (hero-img this) ")")}}]
      [:text {:x (+ (:width (peli/frame game)) 20)
@@ -71,15 +72,15 @@
       (str "coins: " (:score (peli/state game)))]])
 
   peli/Gravity
-  (gravity [this game ch]
+  (gravity [this game]
      (peli/apply-gravity this))
 
   peli/Physics
-   (physics [this time-diff game ch]
+   (physics [this time-diff game]
      (peli/apply-physics this game))
 
   peli/Collision
-   (collide [this body game ch]
+   (collide [this body game]
      (condp = (type body)
        svg/Block (peli/collide-solid this body)
        BadGuy (peli/collide-action this body {:bottom #(assoc % :vy 5)})
@@ -88,20 +89,20 @@
 
 (defrecord BadGuy [id width height x y vx vy]
   peli/Pen
-  (draw [this game ch]
+  (draw [this game]
     [:rect {:x x :y y :width width :height height
             :style {:fill "url(#goomba)"}}])
 
   peli/Gravity
-  (gravity [this game ch]
+  (gravity [this game]
      (peli/apply-gravity this))
 
   peli/Physics
-   (physics [this time-diff game ch]
+   (physics [this time-diff game]
      (peli/apply-physics this game))
 
   peli/Collision
-  (collide [this body game ch]
+  (collide [this body game]
     (condp = (type body)
       svg/Block (-> this
                     (peli/collide-solid body)
@@ -109,7 +110,7 @@
                                          {:left #(assoc % :vx (* (:vx %) -1))
                                           :right #(assoc % :vx (* (:vx %) -1))}))
       Hero (if (= (:state this) :dead) this
-               (peli/collide-action this body {:top (kill-bad-guy ch)}))
+               (peli/collide-action this body {:top (kill-bad-guy)}))
       this)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -118,17 +119,19 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (def key-actions
-  {39 {:on-down [[:update-entity :hero #(assoc % :vx 2)]] ;right
-       :on-up [[:update-entity :hero #(assoc % :vx 0)]]}
-   37 {:on-down [[:update-entity :hero #(assoc % :vx -2)]] ;left
-       :on-up [[:update-entity :hero #(assoc % :vx 0)]]}
-   32 {:on-down [[:update-entity :hero #(if (zero? (:vy %))
-                                           (do (peli/play-sound "jump")
-                                               (assoc % :vy 7 ))
-                                           %)]]}
-   13 {:on-down [[:hide :start] [:unpause]]}
-   27 {:on-down [[:pause]]}
-   68 {:on-down [[:debug]]}})
+  {39 {:on-down [(fn [_] (re-frame/dispatch [:peli/update-entity :hero #(assoc % :vx 2)]))] ;right
+       :on-up [(fn [_] (re-frame/dispatch [:peli/update-entity :hero #(assoc % :vx 0)]))]}
+   37 {:on-down [(fn [_] (re-frame/dispatch [:peli/update-entity :hero #(assoc % :vx -2)]))] ;left
+       :on-up [(fn [_] (re-frame/dispatch [:peli/update-entity :hero #(assoc % :vx 0)]))]}
+   32 {:on-down [(fn [_] (re-frame/dispatch [:peli/update-entity :hero #(if (zero? (:vy %))
+                                                                         (do (svg/play-sound "jump")
+                                                                             (assoc % :vy 7 ))
+                                                                         %)]))]}
+   13 {:on-down [#(re-frame/dispatch [:peli/hide :start])
+                 #(re-frame/dispatch [:peli/unpause])]}
+   27 {:on-down [#(re-frame/dispatch [:peli/pause])]}
+   68 {:on-down [#(re-frame/dispatch [:peli/toggle-debugger])]}})
+
 
 (def world
   (peli/World. {:width 1000 :height 400 :img nil :color "#72BCD4"}
@@ -189,13 +192,6 @@
 ;; Run Game
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defonce game-state (svg/svg-game game-config))
+(run-game game-config :world1  svg/draw-world "myGameDiv")
 
-(defonce game (peli/init-game game-state :world1 true))
-
-(peli/render-game game "myGameDiv")
-
-(debugger/init-debugger (:debug-ch game)
-                        game-state
-                        "debugger"
-                        nil)
+(debugger/init-debugger "debugger" nil)
