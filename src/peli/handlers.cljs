@@ -10,6 +10,10 @@
    (let [new-db (update db :peli/game
                         (fn [game]
                           (cond
+                            (and (not (get-in db [:peli/debug :hidden]))
+                                 (= :debug (get-in db [:peli/debug :mode])))
+                            game
+
                             (= (peli/run-state game) :paused) ;;show prompts
                             (peli/adjust-frame game)
 
@@ -17,7 +21,8 @@
                             (-> game
                                 (peli/run-physics)
                                 (peli/adjust-frame)))))]
-     (when (= :record (get-in db [:peli/debug :mode]))
+     (when (and (not (get-in db [:peli/debug :hidden]))
+                (= :record (get-in db [:peli/debug :mode])))
        (re-frame/dispatch [:peli-debug/add-event]))
      new-db)))
 
@@ -71,7 +76,7 @@
      (= :debug (get-in db [:peli/debug :mode]))
      (d/start-record)
 
-     (= :debug (get-in db [:peli/debug :record]))
+     (= :record (get-in db [:peli/debug :mode]))
      (d/start-debug)
 
      :always
@@ -80,12 +85,12 @@
 (re-frame/register-handler
  :peli-debug/record
  (fn [db _]
-   (d/start-record db)))
+   (update-in db [:peli/debug] d/start-record)))
 
 (re-frame/register-handler
- :peli-debug/debug
+ :peli-debug/start-debug
  (fn [db _]
-   (d/start-debug db)))
+   (update-in db [:peli/debug] d/start-debug)))
 
 (re-frame/register-handler
  :peli-debug/next-event

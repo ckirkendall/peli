@@ -130,7 +130,7 @@
    13 {:on-down [#(re-frame/dispatch [:peli/hide :start])
                  #(re-frame/dispatch [:peli/unpause])]}
    27 {:on-down [#(re-frame/dispatch [:peli/pause])]}
-   68 {:on-down [#(re-frame/dispatch [:peli/toggle-debugger])]}})
+   68 {:on-down [#(re-frame/dispatch [:peli-debug/toggle-debugger])]}})
 
 
 (def world
