@@ -7,7 +7,8 @@
                  [cljsjs/react "15.3.1-0"]
                  [re-frame "0.8.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
-                 [devcards "0.2.1-7"]]
+                 [devcards "0.2.1-7"]
+                 [net.mikera/core.matrix "0.55.0"]]
 
   :source-paths ["src"]
   :test-paths ["test"]
@@ -25,7 +26,7 @@
                               :compiler {:asset-path "js/out"
                                          :output-to "dev/resources/public/js/main.js"
                                          :output-dir "dev/resources/public/js/out"
-                                         :main peli.play
+                                         :main peli.simulation
                                          :optimizations :none
                                          :source-map-timestamp true
                                          :source-map true}}]}}})
