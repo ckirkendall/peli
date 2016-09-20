@@ -6,7 +6,6 @@
 ;; Helper Function
 
 (defn- break-force-up [position point force]
-  (println "bfu:" position point force)
   (let [[rx ry :as r-vec] (matrix/sub position point)
         _ (println :r-vec r-vec)
         r-unit (matrix/normalise r-vec)
@@ -21,7 +20,7 @@
 
 (def gravity-scale 5.0)
 (def default-gravity [0 (* 10.0 gravity-scale)])
-(def default-dt (/ 60.0 1000.0))
+(def default-dt (/ 1 60))
 
 (defn apply-angular-force [body [[force point] & force-pairs] dt]
   (if (and force point)
@@ -30,13 +29,11 @@
           torque (- (* ry fx) (* rx fy))
           accel (* torque (geo/inv-moment-i body))
           cur-vel (geo/angular-velocity body)]
-      (println "ANG:" [rx ry] torque accel cur-vel)
       (geo/angular-velocity body (+ cur-vel (* accel dt))))))
 
 
 (defn apply-linear-force [body force dt]
   (let [linear-accel (matrix/mul force (geo/inv-mass body))]
-    (println "LIN_ACCEL:" linear-accel)
     (geo/linear-velocity body (matrix/add (geo/linear-velocity body)
                                           (matrix/mul linear-accel dt)))))
 
@@ -55,7 +52,6 @@
                          [0 []]
                          points)
           [linear angular-force-pairs] forces]
-      (println "FORCES:" forces (not= 0.0 (geo/inv-moment-i body)))
       (cond-> body
         (not= 0.0 (geo/inv-mass body))
         (apply-linear-force linear dt)
@@ -85,7 +81,6 @@
   (- (* x1 y2) (* x2 y1)))
 
 (defn apply-impulse [body impulse contact-vec]
-  (println "AI:" body impulse contact-vec)
   (-> body
       (geo/linear-velocity
        (matrix/add (geo/linear-velocity body)

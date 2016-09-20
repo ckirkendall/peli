@@ -29,7 +29,7 @@
         (if (= 0.0 dist)
           (Collision. [(geo/position a)] (geo/radius a) [1 0] a b)
           (let [normal (matrix/div normal dist)
-                contacs [(matrix/add (matrix/mmul normal (geo/radius a))
+                contacts [(matrix/add (matrix/mmul normal (geo/radius a))
                                      (geo/position a))]]
             (Collision. contacts (- total-r dist) normal a b)))))))
 
@@ -113,7 +113,7 @@
 (defn poly->circle [body1 body2]
   (when-let [collision (circle->poly body2 body1)]
     (-> (update collision :normal matrix/mmul -1.0)
-        (assoc :a (:b collsion))
+        (assoc :a (:b collision))
         (assoc :b (:a collision)))))
 
 ;; ---------------------------------------------------------------------
@@ -150,7 +150,7 @@
                     v-tmp (matrix/add (matrix/mmul a-rot-mat (nth points idx))
                                       a-pos)
                     v-tmp (matrix/mmul b-rot-mat-trans (matrix/sub v-tmp b-pos))
-                    n-depth (matrix/dot norm, (matrix/sub sup-point v-tmp))]
+                    n-depth (matrix/dot norm (matrix/sub sup-point v-tmp))]
                 (if (> n-depth depth)
                   [idx n-depth]
                   [best-axis depth])))
@@ -198,7 +198,6 @@
                (matrix/add v1 (matrix/mul (matrix/sub v2 v1)
                                           alpha)))
              o2)]
-    (println :CLIP [d1 d2])
     [(cond-> 0
        (<= d1 0.0) inc
        (<= d2 0.0) inc
@@ -213,8 +212,8 @@
       (let [[b-idx depth-b] (find-axis-least-depth orig-b orig-a)]
         (when-not (>= depth-b 0.0)
           (let [[a b idx flip depth] (if (bias-greater-than depth-a depth-b)
-                                 [a b a-idx false depth-a]
-                                 [b a b-idx true depth-b])
+                                       [orig-a orig-b a-idx false depth-a]
+                                       [orig-b orig-a b-idx true depth-b])
                 incident-face (find-incident-face a b idx)
                 a-points (geo/rel-points a)
                 a-rot-mat (geo/rotation-matrix a)
@@ -239,7 +238,6 @@
               (let [[sp incident-face] (clip side-plane-norm
                                               pos-side
                                               incident-face)]
-                (println :SP2 sp)
                 (when (= sp 2) ;;floating point error if not 2
                   (let [[ifn1 ifn2] incident-face
                         d-tmp (- (matrix/dot ref-face-norm ifn1) ref-c)

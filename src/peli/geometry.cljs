@@ -99,7 +99,7 @@
   (id [this] (:id this))
 
   IRotate
-  (rotate [this radians] (update this rotation + radians))
+  (rotate [this radians] (update this :rotation + radians))
   (rotation [this] (:rotation this))
 
 
@@ -143,7 +143,7 @@
   (static-friction [this] (:static-friction this))
   (static-friction [this val] (assoc this :static-friction val))
   (dynamic-friction [this] (:dynamic-friction this))
-  (dyanmic-friction [this val] (assoc this :dynamic-friction val)))
+  (dynamic-friction [this val] (assoc this :dynamic-friction val)))
 
 
 

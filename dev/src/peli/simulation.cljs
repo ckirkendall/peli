@@ -16,17 +16,32 @@
  ::init
  (fn [db _]
    (let [b1 (-> (geo/create-circle {:id :box1
-                                    :position [200.0 100.0]
-                                    :radius 50.0
-                                    :mass 0.1})
-                (phy/apply-force [200.0 0.0] [[175.0 94.0]] 0.016))]
+                                    :position [100.0 200.0]
+                                    :radius 35.0
+                                    :mass 0.2})
+                (phy/apply-force [3000.0 0.0] [[75.0 194.0]] phy/default-dt))]
      (println "B1:" b1)
      {:box1 b1
       :box2 (geo/create-box {:id :box2
-                             :position [400.0 100.0]
+                             :position [300.0 225.0]
                              :width 50.0
                              :height 50.0
-                             :mass 1.0})})))
+                             :mass 0.4})
+      :box3 (geo/create-box {:id :box3
+                             :position [450.0 220.0]
+                             :width 50.0
+                             :height 50.0
+                             :mass 0.4})})))
+
+(defn test-collisions [pairs]
+  (reduce (fn [colls [o1 o2]]
+            (if (geo/bounds-overlap? o1 o2)
+              (if-let [collision (coll/collision o1 o2)]
+                (conj colls collision)
+                colls)
+              colls))
+          []
+          pairs))
 
 (re-frame/register-handler
  ::step
@@ -36,27 +51,23 @@
                       (map #(phy/apply-physics % 0.016) (vals db)))
            b1 (:box1 db)
            b2 (:box2 db)
-           overlap? (geo/bounds-overlap? b1 b2)
-           collision (when overlap? (coll/collision b1 b2))]
-       (when overlap?
-         (println "BOUNDS OVERLAP" (geo/bounds b1) (geo/bounds b2)))
-       (if collision
-         (let [_ (println "COLLISION:" collision)
-               colls (res/collision-response [collision] 0.16 phy/default-gravity)
-               _ (println "COLs:" colls)
-               [{:keys [a b] :as col}] (res/position-correction colls)]
-           (assoc db
-                  (:id a) a
-                  (:id b) b
-                  #_#_:collision col))
+           b3 (:box3 db)
+           collisions (test-collisions [[b1 b2] [b2 b3] [b1 b3]])]
+       (if-not (empty? collisions)
+         (let [colls (res/collision-response collisions phy/default-dt phy/default-gravity)
+               colls (res/position-correction colls)]
+           (reduce (fn [db {:keys [a b] :as col}]
+                     (assoc db (:id a) a (:id b) b))
+                   db
+                   colls))
          db))
      db)))
 
 
 (re-frame/register-sub
- ::box
- (fn [db [_ id]]
-   (reaction (get @db id))))
+ ::bodies
+ (fn [db _]
+   (reaction (vals @db))))
 
 
 (defn rad->deg [rad]
@@ -69,42 +80,50 @@
                                                    (str x "," y)) points)))
                            (str " " fx "," fy))]
     [:polygon {:points pstr
-              :style {:fill "white"
-                      :stroke "grey"
+              :style {:fill "lightgray"
+                      :stroke "blue"
                       :stroke-width "1"}}]))
 
 (defn draw-circle [body]
-  (let [[x y] (geo/position body)]
-    [:circle {:cx x :cy y :r (geo/radius body)
-             :style {:fill "white"
-                     :stroke "grey"
-                     :stroke-width "1"}}]))
+  (let [[x y] (geo/position body)
+        r (geo/radius body)
+        rot (geo/rotation body)]
+    [:g {:transform (str "translate(" x " " y ") "
+                         "rotate(" (rad->deg rot) " " 0 " " 0 ")")}
+     [:circle {:cx 0 :cy 0 :r r
+               :style {:fill "lightgray"
+                       :stroke "blue"
+                       :stroke-width "1"}}]
+     [:line {:x1 0 :y1 r :x2 0 :y2 0
+             :style {:stroke-width "2" :stroke "blue"}}]]))
 
 (defn bodies->svg []
-  (let [box1 (re-frame/subscribe [::box :box1])
-        box2 (re-frame/subscribe [::box :box2])]
+  (let [bodies (re-frame/subscribe [::bodies])]
     (fn []
-      (let [width 600
-            height 400]
-        (when (and @box1 @box2)
+      (let [width 1000
+            height 600]
+        (when-not (empty? @bodies)
           [:div
            [:svg {:width width
                   :height height}
-            [:rect {:fill "black"
+            [:rect {:fill "darkgray"
                     :x 0 :y 0
                     :width width
                     :height height}]
             [:g
-             [draw-circle @box1]
-             [draw-box @box2]]]])))))
+             (map (fn [body]
+                    (if (instance? geo/Circle body)
+                      ^{:key (:id body)} [draw-circle body]
+                      ^{:key (:id body)} [draw-box body]))
+               @bodies)]]])))))
 
 
 (defn init []
   (re-frame/dispatch [::init])
   (go-loop []
-    (<! (timeout 16))
+    (<! (timeout (* 1000 phy/default-dt)))
     (re-frame/dispatch [::step])
-    (recur))
+    (recur ))
   (reagent/render-component
    [bodies->svg]
    (js/document.getElementById  "myGameDiv")))
