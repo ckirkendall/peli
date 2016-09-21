@@ -18,9 +18,9 @@
 ;; ---------------------------------------------------------------------
 ;; Force Functions
 
-(def gravity-scale 5.0)
+(def gravity-scale 30.0)
 (def default-gravity [0 (* 10.0 gravity-scale)])
-(def default-dt (/ 1 60))
+(def default-dt (/ 1.0 60.0))
 
 (defn apply-angular-force [body [[force point] & force-pairs] dt]
   (if (and force point)
@@ -39,14 +39,13 @@
 
 
 (defn apply-force [body force points dt]
-  (if-not (and (zero? (geo/inv-mass body))
-               (zero? (geo/inv-moment-i body)))
+  (if-not (and (= (geo/inv-mass body) 0.0)
+               (= (geo/inv-moment-i body) 0.0))
     (let [partial-force (matrix/div force (count points))
           forces (reduce (fn [[linear angular] point]
                            (let [[l a] (break-force-up (geo/position body)
                                                        point
                                                        partial-force)]
-                             (println "L_A:" l a)
                              [(matrix/add linear l)
                               (conj angular [a point])]))
                          [0 []]
@@ -60,33 +59,46 @@
         (apply-angular-force angular-force-pairs dt)))
     body))
 
+(defn apply-gravity [body gravity dt]
+  (if (and (= (geo/inv-mass body) 0.0)
+           (= (geo/inv-moment-i body) 0.0))
+    body
+    (let [lv (geo/linear-velocity body)]
+      (geo/linear-velocity body (matrix/add lv (matrix/mul gravity dt))))))
 
 (defn apply-physics [body dt]
-  (let [[x y] (geo/position body)
-        [lx ly] (geo/linear-velocity body)
-        av (geo/angular-velocity body)
-        r (geo/rotation body)]
-    (-> body
-        (geo/translate [(* lx dt) (* ly dt)])
-        (geo/rotate (* av dt)))))
+  (if (and (= (geo/inv-mass body) 0.0)
+           (= (geo/inv-moment-i body) 0.0))
+    body
+    (let [[x y] (geo/position body)
+          [lx ly] (geo/linear-velocity body)
+          av (geo/angular-velocity body)
+          r (geo/rotation body)]
+      (-> body
+          (geo/translate [(* lx dt) (* ly dt)])
+          (geo/rotate (* av dt))))))
 
 
 (defn cross-rv [r [x y]]
-  [(* r x) (* -1.0 r y)])
+  [(* -1.0 r y) (* r x)])
 
 (defn cross-vr [[x y] r]
-  [(* -1.0 r x) (* r y)])
+  [(* r y) (* -1.0 r x)])
 
 (defn cross-vv [[x1 y1] [x2 y2]]
   (- (* x1 y2) (* x2 y1)))
 
 (defn apply-impulse [body impulse contact-vec]
-  (-> body
-      (geo/linear-velocity
-       (matrix/add (geo/linear-velocity body)
-                   (matrix/mmul (geo/inv-mass body)
-                                impulse)))
-      (geo/angular-velocity
-       (matrix/add (geo/angular-velocity body)
-                   (matrix/mmul (geo/inv-moment-i body)
-                                (cross-vv contact-vec impulse))))))
+  #_(println "AI:" body impulse contact-vec)
+  (if (and (= (geo/inv-mass body) 0.0)
+           (= (geo/inv-moment-i body) 0.0))
+    body
+    (-> body
+        (geo/linear-velocity
+         (matrix/add (geo/linear-velocity body)
+                     (matrix/mmul (geo/inv-mass body)
+                                  impulse)))
+        (geo/angular-velocity
+         (matrix/add (geo/angular-velocity body)
+                     (* (geo/inv-moment-i body)
+                        (cross-vv contact-vec impulse)))))))

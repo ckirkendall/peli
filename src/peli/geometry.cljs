@@ -249,8 +249,8 @@
                            linear-velocity [0.0 0.0]
                            angular-velocity 0.0
                            restitution 0.2
-                           dynamic-friction 0.4
-                           static-friction 0.4}}]
+                           dynamic-friction 0.3
+                           static-friction 0.5}}]
   (-> (map->Circle {:id id
                     :position position
                     :rotation rotation
@@ -280,8 +280,8 @@
                         linear-velocity [0.0 0.0]
                         angular-velocity 0.0
                         restitution 0.2
-                        dynamic-friction 0.4
-                        static-friction 0.4}}]
+                        dynamic-friction 0.3
+                        static-friction 0.5}}]
   (let [points [[(* -1.0 (/ width 2.0))
                  (* -1.0 (/ height 2.0))]
                 [(/ width 2.0)
@@ -303,5 +303,6 @@
                              :dynamic-friction dynamic-friction
                              :restitution restitution})
         (mass m)
-        (moment-i (/ (* m (+ (* width width)
-                             (* height height))) 12.0)))))
+        (moment-i (when m
+                    (/ (* m (+ (* width width)
+                               (* height height))) 12.0))))))

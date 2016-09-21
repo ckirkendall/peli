@@ -11,27 +11,49 @@
    [peli.collision :as coll]
    [peli.response :as res]))
 
+(def width 1000.0)
+(def height 600.0)
 
 (re-frame/register-handler
  ::init
  (fn [db _]
    (let [b1 (-> (geo/create-circle {:id :box1
-                                    :position [100.0 200.0]
+                                    :position [50.0 250.0]
                                     :radius 35.0
-                                    :mass 0.2})
-                (phy/apply-force [3000.0 0.0] [[75.0 194.0]] phy/default-dt))]
+                                    :mass js/Number.POSITIVE_INFINITY #_0.2})
+                (phy/apply-force [2050.0 0.0] [[15.0 260.0]] phy/default-dt))]
      (println "B1:" b1)
      {:box1 b1
       :box2 (geo/create-box {:id :box2
                              :position [300.0 225.0]
                              :width 50.0
                              :height 50.0
-                             :mass 0.4})
+                             :mass js/Number.POSITIVE_INFINITY #_0.4})
       :box3 (geo/create-box {:id :box3
                              :position [450.0 220.0]
                              :width 50.0
                              :height 50.0
-                             :mass 0.4})})))
+                             :mass 0.4})
+      :bound1 (geo/create-box {:id :bound1
+                               :position [0.0 (/ height 2.0)]
+                               :width 10
+                               :height height
+                               :mass js/Number.POSITIVE_INFINITY})
+      :bound2 (geo/create-box {:id :bound2
+                               :position [width (/ height 2.0)]
+                               :width 10
+                               :height height
+                               :mass js/Number.POSITIVE_INFINITY})
+      :bound3 (geo/create-box {:id :bound3
+                               :position [(/ width 2.0) 0]
+                               :width width
+                               :height 10
+                               :mass js/Number.POSITIVE_INFINITY})
+      :bound4 (geo/create-box {:id :bound4
+                               :position [(/ width 2.0) height]
+                               :width width
+                               :height 10
+                               :mass js/Number.POSITIVE_INFINITY})})))
 
 (defn test-collisions [pairs]
   (reduce (fn [colls [o1 o2]]
@@ -47,19 +69,34 @@
  ::step
  (fn [db _]
    (if-not (:collision db)
-     (let [db (zipmap (keys db)
-                      (map #(phy/apply-physics % 0.016) (vals db)))
+     (let [dt phy/default-dt
+           db (zipmap (keys db)
+                      (map #(-> %
+                                (phy/apply-gravity phy/default-gravity dt)
+                                (phy/apply-physics dt))
+                        (vals db)))
            b1 (:box1 db)
            b2 (:box2 db)
            b3 (:box3 db)
-           collisions (test-collisions [[b1 b2] [b2 b3] [b1 b3]])]
+           bound1 (:bound1 db)
+           bound2 (:bound2 db)
+           bound3 (:bound3 db)
+           bound4 (:bound4 db)
+           collisions (test-collisions [[b1 b2] [b2 b3] [b1 b3]
+                                        [b1 bound1] [b2 bound1] [b3 bound1]
+                                        [b1 bound2] [b2 bound2] [b3 bound2]
+                                        [b1 bound3] [b2 bound3] [b3 bound3]
+                                        [b1 bound4] [b2 bound4] [b3 bound4]])]
        (if-not (empty? collisions)
-         (let [colls (res/collision-response collisions phy/default-dt phy/default-gravity)
+         (let [colls (res/collision-response collisions dt phy/default-gravity)
                colls (res/position-correction colls)]
-           (reduce (fn [db {:keys [a b] :as col}]
-                     (assoc db (:id a) a (:id b) b))
-                   db
-                   colls))
+           #_(println :COLLISION colls)
+           (-> (reduce (fn [db {:keys [a b] :as col}]
+                               (assoc db (:id a) a (:id b) b))
+                             db
+                             colls)
+               #_(assoc :collsion colls))
+           )
          db))
      db)))
 
@@ -100,22 +137,20 @@
 (defn bodies->svg []
   (let [bodies (re-frame/subscribe [::bodies])]
     (fn []
-      (let [width 1000
-            height 600]
-        (when-not (empty? @bodies)
-          [:div
-           [:svg {:width width
-                  :height height}
-            [:rect {:fill "darkgray"
-                    :x 0 :y 0
-                    :width width
-                    :height height}]
-            [:g
-             (map (fn [body]
-                    (if (instance? geo/Circle body)
-                      ^{:key (:id body)} [draw-circle body]
-                      ^{:key (:id body)} [draw-box body]))
-               @bodies)]]])))))
+      (when-not (empty? @bodies)
+        [:div
+         [:svg {:width width
+                :height height}
+          [:rect {:fill "darkgray"
+                  :x 0 :y 0
+                  :width width
+                  :height height}]
+          [:g
+           (map (fn [body]
+                  (if (instance? geo/Circle body)
+                    ^{:key (:id body)} [draw-circle body]
+                    ^{:key (:id body)} [draw-box body]))
+             @bodies)]]]))))
 
 
 (defn init []

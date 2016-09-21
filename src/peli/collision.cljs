@@ -47,7 +47,7 @@
                      (fn [[n-idx sep] idx]
                        (let [n-sep (matrix/dot (nth normals idx)
                                                (matrix/sub center
-                                                           (nth points idx)))]
+                                                 (nth points idx)))]
                          (cond
                            (> n-sep (geo/radius a)) ;; no collision
                            (reduced nil)
@@ -57,15 +57,16 @@
 
                            :else
                            [n-idx sep])))
-                            [0 js/Number.NEGATIVE_INFINITY]
-                            (range (count points)))
+                     [0 js/Number.NEGATIVE_INFINITY]
+                     (range (count points)))
         ;;get contact edge
         edge (when n-idx
                [(nth points n-idx) (nth points (mod (inc n-idx) (count points)))])]
     ;; Is center in the polygon
     (when n-idx
       (if (< sep 0.0001)
-        (let [normal (matrix/mmul (geo/rotation-matrix b) (nth normals n-idx))]
+        (let [normal (matrix/mul (matrix/mmul (geo/rotation-matrix b)
+                                              (nth normals n-idx)) -1.0)]
           (Collision. [(matrix/add (matrix/mmul normal radius)
                                    (geo/position a))]
                       radius
@@ -102,10 +103,10 @@
 
             ;;closest to face
             :else
-            (let [normal (matrix/mmul (matrix/mmul (geo/rotation-matrix b)
+            (let [normal (matrix/mul (matrix/mmul (geo/rotation-matrix b)
                                                    (nth normals n-idx))
                                       -1.0)
-                  contact (matrix/add (matrix/mmul normal radius)
+                  contact (matrix/add (matrix/mul normal radius)
                                       (geo/position a))]
               (Collision. [contact] depth normal a b))))))))
 
@@ -120,14 +121,15 @@
 ;; Poly to Poly Collision
 
 (defn get-support [body dir]
-  (first
-   (reduce (fn [[best-point best-proj] point]
-             (let [proj (matrix/dot point dir)]
-               (if (> proj best-proj)
-                 [point proj]
-                 [best-point best-proj])))
-           [nil js/Number.NEGATIVE_INFINITY]
-           (geo/rel-points body))))
+  (let [[p1 & points] (geo/rel-points body)]
+    (first
+     (reduce (fn [[best-point best-proj] point]
+               (let [proj (matrix/dot point dir)]
+                 (if (> proj best-proj)
+                   [point proj]
+                   [best-point best-proj])))
+             [p1 (matrix/dot p1 dir)]
+             points))))
 
 
 (defn find-axis-least-depth [a b]
@@ -208,8 +210,10 @@
 
 (defn poly->poly [orig-a orig-b]
   (let [[a-idx depth-a] (find-axis-least-depth orig-a orig-b)]
+    #_(println "A:" orig-a a-idx depth-a)
     (when-not (>= depth-a 0.0)
       (let [[b-idx depth-b] (find-axis-least-depth orig-b orig-a)]
+        #_(println "B:" orig-b b-idx depth-b)
         (when-not (>= depth-b 0.0)
           (let [[a b idx flip depth] (if (bias-greater-than depth-a depth-b)
                                        [orig-a orig-b a-idx false depth-a]
