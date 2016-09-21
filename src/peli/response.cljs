@@ -4,6 +4,10 @@
             [peli.collision :as coll]
             [clojure.core.matrix :as matrix]))
 
+(defn =* [a b]
+  (<=  (js/Math.abs (- a b)) 0.0001))
+
+
 (defn gravity-check-fn [a b dt gravity]
   (fn [rest contact]
     (let [ra (matrix/sub contact (geo/position a))
@@ -50,17 +54,18 @@
   (* val val))
 
 
-
 (defn apply-impulse [collision]
   (let [{:keys [a b contacts normal depth rest-c sf-c df-c]} collision
+        orig-a a
+        orig-b b
         pos-a (geo/position a)
         pos-b (geo/position b)
         im-a (geo/inv-mass a)
         im-b (geo/inv-mass b)
         imi-a (geo/inv-moment-i a)
         imi-b (geo/inv-moment-i b)]
-    (if (= (+ (geo/inv-mass a)
-              (geo/inv-mass b)) 0.0)
+    (if (=* (+ (geo/inv-mass a)
+               (geo/inv-mass b)) 0.0)
       (infinit-mass-correction collision)
       (reduce
        (fn [coll contact]
@@ -69,10 +74,10 @@
                rb (matrix/sub contact pos-b)
                rv (matrix/sub
                     (matrix/add
-                     (geo/linear-velocity b)
-                     (phy/cross-rv (geo/angular-velocity b) rb))
-                    (geo/linear-velocity a)
-                    (phy/cross-rv (geo/angular-velocity a) ra))
+                     (geo/linear-velocity orig-b)
+                     (phy/cross-rv (geo/angular-velocity orig-b) rb))
+                    (geo/linear-velocity orig-a)
+                    (phy/cross-rv (geo/angular-velocity orig-a) ra))
                contact-vel (matrix/dot rv normal)]
            (if (> contact-vel 0.0)
              collision
@@ -91,14 +96,17 @@
                             (double (count contacts)))
                    ;; Apply Impulse
                    impulse (matrix/mmul normal imp)
+
+                   orig-a (phy/apply-impulse orig-a (matrix/mul impulse -1.0) ra)
+                   orig-b (phy/apply-impulse orig-b impulse rb)
                    a (phy/apply-impulse a (matrix/mul impulse -1.0) ra)
                    b (phy/apply-impulse b impulse rb)
                    ;; Friction impulse
                    rv (matrix/sub
-                        (matrix/add (geo/linear-velocity b)
-                                    (phy/cross-rv (geo/angular-velocity b) rb))
-                        (geo/linear-velocity a)
-                        (phy/cross-rv (geo/angular-velocity a) ra))
+                        (matrix/add (geo/linear-velocity orig-b)
+                                    (phy/cross-rv (geo/angular-velocity orig-b) rb))
+                        (geo/linear-velocity orig-a)
+                        (phy/cross-rv (geo/angular-velocity orig-a) ra))
                    t (matrix/normalise
                       (matrix/sub rv (matrix/mul normal
                                                  (matrix/dot rv normal))))
@@ -106,7 +114,7 @@
                    tan (/ (/ (* -1.0 (matrix/dot rv t))
                              inv-mass-sum)
                           (double (count contacts)))]
-               (if (= tan 0.0)
+               (if (=* tan 0.0)
                  (assoc collision :a a :b b)
                  (let [tan-impulse (if (< (js/Math.abs tan)
                                           (* imp sf-c))
@@ -152,7 +160,7 @@
                                  {}
                                  collisions))
                        {}
-                       (range 10))]
+                       (range 5))]
     (mapv (fn [{:keys [a b] :as col}]
             (assoc col
                    :a (get bodies (geo/id a))

@@ -20,15 +20,15 @@
    (let [b1 (-> (geo/create-circle {:id :box1
                                     :position [50.0 250.0]
                                     :radius 35.0
-                                    :mass js/Number.POSITIVE_INFINITY #_0.2})
-                (phy/apply-force [2050.0 0.0] [[15.0 260.0]] phy/default-dt))]
+                                    :mass 0.2})
+                (phy/apply-force [3400.0 0.0] [[15.0 260.0]] phy/default-dt))]
      (println "B1:" b1)
      {:box1 b1
       :box2 (geo/create-box {:id :box2
                              :position [300.0 225.0]
                              :width 50.0
                              :height 50.0
-                             :mass js/Number.POSITIVE_INFINITY #_0.4})
+                             :mass 0.4})
       :box3 (geo/create-box {:id :box3
                              :position [450.0 220.0]
                              :width 50.0

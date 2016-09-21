@@ -18,7 +18,7 @@
 ;; ---------------------------------------------------------------------
 ;; Force Functions
 
-(def gravity-scale 30.0)
+(def gravity-scale 40.0)
 (def default-gravity [0 (* 10.0 gravity-scale)])
 (def default-dt (/ 1.0 60.0))
 
@@ -89,16 +89,12 @@
   (- (* x1 y2) (* x2 y1)))
 
 (defn apply-impulse [body impulse contact-vec]
-  #_(println "AI:" body impulse contact-vec)
-  (if (and (= (geo/inv-mass body) 0.0)
-           (= (geo/inv-moment-i body) 0.0))
-    body
-    (-> body
-        (geo/linear-velocity
-         (matrix/add (geo/linear-velocity body)
-                     (matrix/mmul (geo/inv-mass body)
-                                  impulse)))
-        (geo/angular-velocity
-         (matrix/add (geo/angular-velocity body)
-                     (* (geo/inv-moment-i body)
-                        (cross-vv contact-vec impulse)))))))
+  (-> body
+      (geo/linear-velocity
+       (matrix/add (geo/linear-velocity body)
+                   (matrix/mmul (geo/inv-mass body)
+                                impulse)))
+      (geo/angular-velocity
+       (matrix/add (geo/angular-velocity body)
+                   (* (geo/inv-moment-i body)
+                      (cross-vv contact-vec impulse))))))
