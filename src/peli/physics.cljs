@@ -1,18 +1,17 @@
 (ns peli.physics
   (:require [clojure.core.matrix :as matrix]
-            [peli.geometry :as geo]))
+            [peli.geometry :as geo]
+            [peli.vec2 :refer [sub add dot cross-vr cross-rv
+                               cross-vv mul-vr dist-sqr]]))
 
 ;; ---------------------------------------------------------------------
 ;; Helper Function
 
 (defn- break-force-up [position point force]
-  (let [[rx ry :as r-vec] (matrix/sub position point)
-        _ (println :r-vec r-vec)
+  (let [[rx ry :as r-vec] (sub position point)
         r-unit (matrix/normalise r-vec)
-        _ (println :r-unit r-unit (matrix/dot force r-unit))
-        linear-proj (matrix/mul r-unit (matrix/dot force r-unit))
-        _ (println :linear-proj linear-proj )
-        ang-proj (matrix/sub force linear-proj)]
+        linear-proj (mul-vr r-unit (matrix/dot force r-unit))
+        ang-proj (sub force linear-proj)]
     [linear-proj ang-proj]))
 
 ;; ---------------------------------------------------------------------
@@ -25,7 +24,7 @@
 (defn apply-angular-force [body [[force point] & force-pairs] dt]
   (if (and force point)
     (let [[fx fy] force
-          [rx ry] (matrix/sub (geo/position body) point)
+          [rx ry] (sub (geo/position body) point)
           torque (- (* ry fx) (* rx fy))
           accel (* torque (geo/inv-moment-i body))
           cur-vel (geo/angular-velocity body)]
@@ -33,9 +32,9 @@
 
 
 (defn apply-linear-force [body force dt]
-  (let [linear-accel (matrix/mul force (geo/inv-mass body))]
-    (geo/linear-velocity body (matrix/add (geo/linear-velocity body)
-                                          (matrix/mul linear-accel dt)))))
+  (let [linear-accel (mul-vr force (geo/inv-mass body))]
+    (geo/linear-velocity body (add (geo/linear-velocity body)
+                                   (mul-vr linear-accel dt)))))
 
 
 (defn apply-force [body force points dt]
@@ -46,9 +45,9 @@
                            (let [[l a] (break-force-up (geo/position body)
                                                        point
                                                        partial-force)]
-                             [(matrix/add linear l)
+                             [(add linear l)
                               (conj angular [a point])]))
-                         [0 []]
+                         [[0 0] []]
                          points)
           [linear angular-force-pairs] forces]
       (cond-> body
@@ -64,7 +63,7 @@
            (= (geo/inv-moment-i body) 0.0))
     body
     (let [lv (geo/linear-velocity body)]
-      (geo/linear-velocity body (matrix/add lv (matrix/mul gravity dt))))))
+      (geo/linear-velocity body (add lv (mul-vr gravity dt))))))
 
 (defn apply-physics [body dt]
   (if (and (= (geo/inv-mass body) 0.0)
@@ -79,22 +78,12 @@
           (geo/rotate (* av dt))))))
 
 
-(defn cross-rv [r [x y]]
-  [(* -1.0 r y) (* r x)])
-
-(defn cross-vr [[x y] r]
-  [(* r y) (* -1.0 r x)])
-
-(defn cross-vv [[x1 y1] [x2 y2]]
-  (- (* x1 y2) (* x2 y1)))
-
 (defn apply-impulse [body impulse contact-vec]
   (-> body
       (geo/linear-velocity
-       (matrix/add (geo/linear-velocity body)
-                   (matrix/mmul (geo/inv-mass body)
-                                impulse)))
+       (add (geo/linear-velocity body)
+                   (mul-vr impulse (geo/inv-mass body))))
       (geo/angular-velocity
-       (matrix/add (geo/angular-velocity body)
-                   (* (geo/inv-moment-i body)
-                      (cross-vv contact-vec impulse))))))
+       (+ (geo/angular-velocity body)
+          (* (geo/inv-moment-i body)
+             (cross-vv contact-vec impulse))))))

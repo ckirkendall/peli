@@ -1,7 +1,7 @@
 (ns peli.vec2)
 
 (defn dot [[x1 y1] [x2 y2]]
-  (+ (* x1 x2) (* y2 y2)))
+  (+ (* x1 x2) (* y1 y2)))
 
 (defn sub
   ([[x1 y1]]
@@ -13,7 +13,7 @@
   [(- x r) (- y r)])
 
 (defn add [[x1 y1] [x2 y2]]
-   [(+ x1 x1) (+ y1 y2)])
+   [(+ x1 x2) (+ y1 y2)])
 
 (defn add-vr [[x y] r]
   [(+ x r) (+ y r)])
@@ -28,7 +28,7 @@
   [(+ (* a x) (* b y)) (+ (* c x) (* d y))])
 
 (defn dist-sqr
-  ([p1 p2] (dist-sqr (matrix/sub p1 p2)))
+  ([p1 p2] (dist-sqr (sub p1 p2)))
   ([[x y]]
    (+ (* x x) (* y y))))
 

@@ -2,7 +2,9 @@
   (:require [peli.geometry :as geo]
             [peli.physics :as phy]
             [peli.collision :as coll]
-            [clojure.core.matrix :as matrix]))
+            [clojure.core.matrix :as matrix]
+            [peli.vec2 :refer [sub add dot cross-vr cross-rv
+                               cross-vv mul-vr dist-sqr]]))
 
 (defn =* [a b]
   (<=  (js/Math.abs (- a b)) 0.0001))
@@ -10,14 +12,14 @@
 
 (defn gravity-check-fn [a b dt gravity]
   (fn [rest contact]
-    (let [ra (matrix/sub contact (geo/position a))
-          rb (matrix/sub contact (geo/position b))
-          rv (matrix/sub
-               (matrix/add (geo/linear-velocity b)
-                           (phy/cross-rv (geo/angular-velocity b) rb))
-               (geo/linear-velocity a)
-               (phy/cross-rv (geo/angular-velocity a) ra))]
-      (if (< (coll/dist-sqr rv) (+ (coll/dist-sqr (matrix/mul gravity dt)) 0.0001))
+    (let [ra (sub contact (geo/position a))
+          rb (sub contact (geo/position b))
+          rv (sub (sub
+                    (add (geo/linear-velocity b)
+                                (cross-rv (geo/angular-velocity b) rb))
+                    (geo/linear-velocity a))
+               (cross-rv (geo/angular-velocity a) ra))]
+      (if (< (dist-sqr rv) (+ (dist-sqr (mul-vr gravity dt)) 0.0001))
         0.0 ;;gravity is the only acting force
         rest))))
 
@@ -63,26 +65,26 @@
         im-a (geo/inv-mass a)
         im-b (geo/inv-mass b)
         imi-a (geo/inv-moment-i a)
-        imi-b (geo/inv-moment-i b)]
+        imi-b (geo/inv-moment-i b)
+        c-cnt (double (count contacts))]
     (if (=* (+ (geo/inv-mass a)
                (geo/inv-mass b)) 0.0)
       (infinit-mass-correction collision)
       (reduce
        (fn [coll contact]
          (let [{:keys [a b]} coll
-               ra (matrix/sub contact pos-a)
-               rb (matrix/sub contact pos-b)
-               rv (matrix/sub
-                    (matrix/add
-                     (geo/linear-velocity orig-b)
-                     (phy/cross-rv (geo/angular-velocity orig-b) rb))
-                    (geo/linear-velocity orig-a)
-                    (phy/cross-rv (geo/angular-velocity orig-a) ra))
-               contact-vel (matrix/dot rv normal)]
+               ra (sub contact pos-a)
+               rb (sub contact pos-b)
+               rv (sub (sub (add
+                             (geo/linear-velocity orig-b)
+                             (cross-rv (geo/angular-velocity orig-b) rb))
+                         (geo/linear-velocity orig-a))
+                    (cross-rv (geo/angular-velocity orig-a) ra))
+               contact-vel (dot rv normal)]
            (if (> contact-vel 0.0)
              collision
-             (let [ra-cross-n (phy/cross-vv ra normal)
-                   rb-cross-n (phy/cross-vv rb normal)
+             (let [ra-cross-n (cross-vv ra normal)
+                   rb-cross-n (cross-vv rb normal)
                    inv-mass-sum (+ im-a
                                    im-b
                                    (* (sqr ra-cross-n)
@@ -93,34 +95,32 @@
                                   (+ 1.0 rest-c)
                                   contact-vel)
                                inv-mass-sum)
-                            (double (count contacts)))
+                            c-cnt)
                    ;; Apply Impulse
-                   impulse (matrix/mmul normal imp)
+                   impulse (mul-vr normal imp)
 
-                   orig-a (phy/apply-impulse orig-a (matrix/mul impulse -1.0) ra)
+                   orig-a (phy/apply-impulse orig-a (mul-vr impulse -1.0) ra)
                    orig-b (phy/apply-impulse orig-b impulse rb)
-                   a (phy/apply-impulse a (matrix/mul impulse -1.0) ra)
+                   a (phy/apply-impulse a (mul-vr impulse -1.0) ra)
                    b (phy/apply-impulse b impulse rb)
                    ;; Friction impulse
-                   rv (matrix/sub
-                        (matrix/add (geo/linear-velocity orig-b)
-                                    (phy/cross-rv (geo/angular-velocity orig-b) rb))
-                        (geo/linear-velocity orig-a)
-                        (phy/cross-rv (geo/angular-velocity orig-a) ra))
+                   rv (sub (sub (add (geo/linear-velocity orig-b)
+                                     (cross-rv (geo/angular-velocity orig-b) rb))
+                             (geo/linear-velocity orig-a))
+                        (cross-rv (geo/angular-velocity orig-a) ra))
                    t (matrix/normalise
-                      (matrix/sub rv (matrix/mul normal
-                                                 (matrix/dot rv normal))))
+                      (sub rv (mul-vr normal (dot rv normal))))
                    ;; Tangent magnitude
-                   tan (/ (/ (* -1.0 (matrix/dot rv t))
+                   tan (/ (/ (* -1.0 (dot rv t))
                              inv-mass-sum)
-                          (double (count contacts)))]
+                          c-cnt)]
                (if (=* tan 0.0)
                  (assoc collision :a a :b b)
                  (let [tan-impulse (if (< (js/Math.abs tan)
                                           (* imp sf-c))
-                                     (matrix/mul t tan)
-                                     (matrix/mul t (* -1.0 imp df-c)))
-                       a (phy/apply-impulse a (matrix/mul tan-impulse -1.0) ra)
+                                     (mul-vr t tan)
+                                     (mul-vr t (* -1.0 imp df-c)))
+                       a (phy/apply-impulse a (mul-vr tan-impulse -1.0) ra)
                        b (phy/apply-impulse b tan-impulse rb)]
                    (assoc collision :a a :b b)))))))
        collision
@@ -136,12 +136,11 @@
                 b-pos (geo/position b)
                 a-im (geo/inv-mass a)
                 b-im (geo/inv-mass b)
-                correction-v (matrix/mul
-                              normal
-                              (* percent (/ (max (- depth k-slop) 0.0)
-                                            (+ a-im b-im))))
-                a (geo/position a (matrix/sub a-pos (matrix/mul correction-v a-im)))
-                b (geo/position b (matrix/add b-pos (matrix/mul correction-v b-im)))]
+                correction-v (mul-vr normal
+                                     (* percent (/ (max (- depth k-slop) 0.0)
+                                                   (+ a-im b-im))))
+                a (geo/position a (sub a-pos (mul-vr correction-v a-im)))
+                b (geo/position b (add b-pos (mul-vr correction-v b-im)))]
             (assoc collision :a a :b b)))
         collisions))
 
