@@ -1,4 +1,9 @@
-(ns peli.vec2)
+(ns peli.phy-math)
+
+(def epsilon 0.0001)
+
+(defn =* [a b]
+  (<=  (js/Math.abs (- a b)) epislon))
 
 (defn dot [[x1 y1] [x2 y2]]
   (+ (* x1 x2) (* y1 y2)))
@@ -32,6 +37,12 @@
   ([[x y]]
    (+ (* x x) (* y y))))
 
+(defn dist
+  ([[x y]]
+   (js/Math.sqrt (+ (* x x) (* y y))))
+  ([p1 p2]
+   (dist (sub p1 p2))))
+
 (defn cross-rv [r [x y]]
   [(* -1.0 r y) (* r x)])
 
@@ -40,3 +51,12 @@
 
 (defn cross-vv [[x1 y1] [x2 y2]]
   (- (* x1 y2) (* x2 y1)))
+
+(defn transpose [[[a b] [c d]]]
+  [[a c]
+   [b d]])
+
+(defn normalize [[x y :as vec2]]
+  (let [len (dist vec2)
+        inv-len (if (> len 0.0001) (/ 1 len) 0)]
+    [(* x inv-len) (* y inv-len)]))

@@ -1,8 +1,8 @@
 (ns peli.collision
   (:require [peli.geometry :as geo]
             [clojure.core.matrix :as matrix]
-            [peli.vec2 :refer [sub add dot cross-vr cross-rv
-                               cross-vv mul-vr dist-sqr mmul42]]))
+            [peli.phy-math :refer [sub add dot cross-vr cross-rv
+                                   cross-vv mul-vr dist-sqr mmul42]]))
 
 
 (defrecord Collision [contacts depth normal a b])

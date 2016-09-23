@@ -1,8 +1,8 @@
 (ns peli.physics
   (:require [clojure.core.matrix :as matrix]
             [peli.geometry :as geo]
-            [peli.vec2 :refer [sub add dot cross-vr cross-rv
-                               cross-vv mul-vr dist-sqr]]))
+            [peli.phy-math :refer [sub add dot cross-vr cross-rv
+                                   cross-vv mul-vr dist-sqr]]))
 
 ;; ---------------------------------------------------------------------
 ;; Helper Function

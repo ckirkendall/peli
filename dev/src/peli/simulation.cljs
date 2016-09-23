@@ -20,20 +20,20 @@
    (let [b1 (-> (geo/create-circle {:id :box1
                                     :position [50.0 250.0]
                                     :radius 35.0
-                                    :mass 0.2})
-                (phy/apply-force [3400.0 0.0] [[15.0 260.0]] phy/default-dt))]
+                                    :density 1})
+                (phy/apply-force [1050.0 0.0] [[15.0 260.0]] 1000.0))]
      (println "B1:" b1)
      {:box1 b1
       :box2 (geo/create-box {:id :box2
                              :position [300.0 225.0]
                              :width 50.0
                              :height 50.0
-                             :mass 0.4})
+                             :density 1})
       :box3 (geo/create-box {:id :box3
                              :position [450.0 220.0]
                              :width 50.0
                              :height 50.0
-                             :mass 0.4})
+                             :density 1})
       :bound1 (geo/create-box {:id :bound1
                                :position [0.0 (/ height 2.0)]
                                :width 10
@@ -43,17 +43,17 @@
                                :position [width (/ height 2.0)]
                                :width 10
                                :height height
-                               :mass js/Number.POSITIVE_INFINITY})
+                               :density js/Number.POSITIVE_INFINITY})
       :bound3 (geo/create-box {:id :bound3
                                :position [(/ width 2.0) 0]
                                :width width
                                :height 10
-                               :mass js/Number.POSITIVE_INFINITY})
+                               :density js/Number.POSITIVE_INFINITY})
       :bound4 (geo/create-box {:id :bound4
                                :position [(/ width 2.0) height]
                                :width width
                                :height 10
-                               :mass js/Number.POSITIVE_INFINITY})})))
+                               :density js/Number.POSITIVE_INFINITY})})))
 
 (defn test-collisions [pairs]
   (reduce (fn [colls [o1 o2]]

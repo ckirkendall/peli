@@ -1,5 +1,6 @@
 (ns peli.geometry
-  (:require [clojure.core.matrix :as matrix]))
+  (:require [clojure.core.matrix :as matrix]
+            [peli.phy-math :refer [add sub cross-vv mul-vr]]))
 
 ;; ---------------------------------------------------------------------
 ;; Protocols
@@ -7,7 +8,7 @@
   (id [this]))
 
 (defprotocol IPolygon
-  (rel-points [this])
+  (rel-points [this] [this val])
   (points [this])
   (rotation-matrix [this])
   (normals [this]))
@@ -53,7 +54,6 @@
 
 
 (defn- invert-mm [mass-or-moment]
-  (println "INVERT_MM:" mass-or-moment)
   (if (or (nil? mass-or-moment)
           (= js/Number.POSITIVE_INFINITY mass-or-moment))
     0
@@ -78,6 +78,49 @@
                   point]))
              [[] p1]
              (rest full-points)))))
+
+(defn- compute-mass-circle* [body density]
+  (let [r (radius body)
+        m (* js/Math.PI r r density)]
+    (-> body
+        (mass m)
+        (moment-i (* m r r)))))
+
+(defn- compute-mass-circle [body density]
+  (if (or (nil? density)
+          (= js/Number.POSITIVE_INFINITY density))
+    (-> body (mass density) (moment-i density))
+    (compute-mass-circle* body density)))
+
+
+(defn- compute-mass-poly* [body density]
+  (let [points (rel-points body)
+        k-inv3 (/ 1.0 3.0)
+        cai (reduce
+             (fn [[c a im] idx]
+               (let [[x1 y1 :as p1] (nth points idx)
+                     [x2 y2 :as p2] (nth points (mod (inc idx) (count points)))
+                     d (cross-vv p1 p2)
+                     tri-area (* 0.5 d)
+                     int-x2 (+ (* x1 x1) (* x1 x2) (* x2 x2))
+                     int-y2 (+ (* y1 y1) (* y1 y2) (* y2 y2))]
+                 [(add c (mul-vr (mul-vr (add p1 p2) k-inv3) tri-area))
+                  (+ a tri-area)
+                  (+ im (* 0.25 k-inv3 d (+ int-x2 int-y2)))]))
+             [[0.0 0.0] 0.0 0.0]
+             (range (count points)))
+        [c area im] cai
+        centroid (mul-vr c (/ 1.0 area))]
+    (-> body
+        (rel-points (mapv #(sub % centroid) points))
+        (mass (* density area))
+        (moment-i (* im density)))))
+
+(defn compute-mass-poly [body density]
+  (if (or (nil? density)
+          (= js/Number.POSITIVE_INFINITY density))
+    (-> body (mass density) (moment-i density))
+    (compute-mass-poly* body density)))
 
 ;; ---------------------------------------------------------------------
 ;; Records
@@ -210,6 +253,7 @@
 
   IPolygon
   (rel-points [this] (:rel-points this))
+  (rel-points [this val] (assoc this :rel-points val))
   (points [this] (create-points this))
   (rotation-matrix [this] (:rotation-matrix this))
   (normals [this] (:normals this))
@@ -238,13 +282,13 @@
 (defn create-circle [{:keys [id
                              position
                              radius
+                             density
                              restitution
                              static-friction
                              dynamic-friction
                              rotation
                              linear-velocity
                              angular-velocity]
-                      m :mass
                       :or {rotation 0.0
                            linear-velocity [0.0 0.0]
                            angular-velocity 0.0
@@ -260,8 +304,7 @@
                     :static-friction static-friction
                     :dynamic-friction dynamic-friction
                     :restitution restitution})
-      (mass m)
-      (moment-i (/ (* m (* radius radius)) 4.0))))
+      (compute-mass-circle density)))
 
 
 
@@ -269,14 +312,15 @@
                           position
                           width
                           height
+                          density
                           restitution
                           static-friction
                           dynamic-friction
                           rotation
                           linear-velocity
                           angular-velocity]
-                   m :mass
-                   :or {rotation 0.0
+                   :or {density js/Number.POSITIVE_INFINITY
+                        rotation 0.0
                         linear-velocity [0.0 0.0]
                         angular-velocity 0.0
                         restitution 0.2
@@ -302,7 +346,4 @@
                              :static-friction static-friction
                              :dynamic-friction dynamic-friction
                              :restitution restitution})
-        (mass m)
-        (moment-i (when m
-                    (/ (* m (+ (* width width)
-                               (* height height))) 12.0))))))
+        (compute-mass-poly density))))

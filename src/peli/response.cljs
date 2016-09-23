@@ -3,11 +3,9 @@
             [peli.physics :as phy]
             [peli.collision :as coll]
             [clojure.core.matrix :as matrix]
-            [peli.vec2 :refer [sub add dot cross-vr cross-rv
-                               cross-vv mul-vr dist-sqr]]))
-
-(defn =* [a b]
-  (<=  (js/Math.abs (- a b)) 0.0001))
+            [peli.phy-math :refer [sub add dot cross-vr cross-rv
+                                   cross-vv mul-vr dist-sqr =*
+                                   transpose normalize]]))
 
 
 (defn gravity-check-fn [a b dt gravity]
@@ -159,7 +157,12 @@
                                  {}
                                  collisions))
                        {}
-                       (range 5))]
+                       ;;In mutable version this was set to 10
+                       ;;interations, due to a fix I put in using
+                       ;;immutable data structures I don't think
+                       ;;it is required to do multiple iterations
+                       ;;to get stability.
+                       (range 1))]
     (mapv (fn [{:keys [a b] :as col}]
             (assoc col
                    :a (get bodies (geo/id a))
