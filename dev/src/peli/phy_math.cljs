@@ -5,6 +5,15 @@
 (defn =* [a b]
   (<=  (js/Math.abs (- a b)) epislon))
 
+(defn perp [[x1 y1]]
+  [(* -1.0 y1) x1])
+
+(defn clamp [val min max]
+  (cond
+    (< val min) min
+    (> val max) max
+    :else val))
+
 (defn dot [[x1 y1] [x2 y2]]
   (+ (* x1 x2) (* y1 y2)))
 

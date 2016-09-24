@@ -10,7 +10,7 @@
 (defprotocol IPolygon
   (rel-points [this] [this val])
   (points [this])
-  (rotation-matrix [this])
+  (rotation-matrix [this] [this val])
   (normals [this]))
 
 (defprotocol ICircle
@@ -18,11 +18,13 @@
 
 (defprotocol IRotate
   (rotate [this radians])
-  (rotation [this]))
+  (rotation [this] [this val])
+  (prev-rotation [this] [this val]))
 
 (defprotocol IPosition
   (translate [this [x y]])
   (position [this] [this [x y]])
+  (prev-position [this] [this [x y]])
   (bounds [this]))
 
 (defprotocol IMass
@@ -127,6 +129,7 @@
 
 (defrecord Circle [id
                    position
+                   prev-position
                    rotation
                    linear-velocity
                    angular-velocity
@@ -144,6 +147,9 @@
   IRotate
   (rotate [this radians] (update this :rotation + radians))
   (rotation [this] (:rotation this))
+  (rotation [this val] (assoc this :rotation val))
+  (prev-rotation [this] (:prev-rotation this))
+  (prev-rotation [this val] (assoc this :prev-rotation val))
 
 
   IPosition
@@ -151,6 +157,8 @@
     (update this :position (fn [[x y]] [(+ x xt) (+ y yt)])))
   (position [this] (:position this))
   (position [this val] (assoc this :position val))
+  (prev-position [this] (:prev-position this))
+  (prev-position [this val] (assoc this :prev-position val))
   (bounds [this] (let [[x y] (:position this)
                        r (:radius this)]
                    [[(- x r) (- y r)]
@@ -192,6 +200,7 @@
 
 (defrecord ConvexPolygon [id
                           position
+                          prev-position
                           rotation
                           linear-velocity
                           angular-velocity
@@ -215,12 +224,17 @@
              :rotation new-rot
              :rotation-matrix (rotation->matrix new-rot))))
   (rotation [this] (:rotation this))
+  (rotation [this val] (assoc this :rotation val))
+  (prev-rotation [this] (:prev-rotation this))
+  (prev-rotation [this val] (assoc this :prev-rotation val))
 
   IPosition
   (translate [this [xt yt]]
     (update this :position (fn [[x y]] [(+ x xt) (+ y yt)])))
   (position [this] (:position this))
   (position [this val] (assoc this :position val))
+  (prev-position [this] (:prev-position this))
+  (prev-position [this val] (assoc this :prev-position val))
   (bounds [this] (let [[p1 & r-points] (create-points this)]
                    (reduce (fn [[[min-x min-y] [max-x max-y]] [x y]]
                              [[(min min-x x)
@@ -297,6 +311,7 @@
                            static-friction 0.5}}]
   (-> (map->Circle {:id id
                     :position position
+                    :prev-position position
                     :rotation rotation
                     :radius radius
                     :linear-velocity linear-velocity
@@ -337,6 +352,7 @@
         normals (find-normals points)]
     (-> (map->ConvexPolygon {:id id
                              :position position
+                             :prev-position position
                              :rotation rotation
                              :rotation-matrix (rotation->matrix 0.0)
                              :linear-velocity linear-velocity

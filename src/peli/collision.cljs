@@ -2,10 +2,38 @@
   (:require [peli.geometry :as geo]
             [clojure.core.matrix :as matrix]
             [peli.phy-math :refer [sub add dot cross-vr cross-rv
-                                   cross-vv mul-vr dist-sqr mmul42]]))
+                                   cross-vv mul-vr dist-sqr mmul42
+                                   perp]]))
 
 
-(defrecord Collision [contacts depth normal a b])
+(defrecord Collision [contacts
+                      depth
+                      penetration
+                      normal
+                      tangent
+                      restitution
+                      dynamic-friction
+                      static-friction
+                      separation
+                      a
+                      b])
+
+(defn collision->
+  ([{:keys [contacts depth normal a b]}]
+   (collision-> contacts depth normal a b))
+  ([contacts depth normal a b]
+   #_(println "COL:" depth normal (mul-vr normal depth))
+   (Collision. contacts
+               depth
+               (mul-vr normal depth)
+               normal
+               (perp normal)
+               (max (geo/restitution a) (geo/restitution b))
+               (max (geo/dynamic-friction a) (geo/dynamic-friction b))
+               (max (geo/static-friction a) (geo/static-friction b))
+               0.0
+               a
+               b)))
 
 (def rel-bias 0.95)
 (def abs-bias 0.01)
@@ -21,14 +49,14 @@
   (let [normal (sub (geo/position b) (geo/position a))
         dist-sqr (dist-sqr normal)
         total-r (+ (geo/radius a) (geo/radius b))]
-    (when (< dist-sqr total-r)
-      (let [dist (Math/sqrt dist-sqr)]
+    (when (< dist-sqr (* total-r total-r))
+      (let [dist (js/Math.sqrt dist-sqr)]
         (if (= 0.0 dist)
-          (Collision. [(geo/position a)] (geo/radius a) [1 0] a b)
+          (collision-> [(geo/position a)] (geo/radius a) [1 0] a b)
           (let [normal (matrix/div normal dist)
                 contacts [(add (mul-vr normal (geo/radius a))
                                (geo/position a))]]
-            (Collision. contacts (- total-r dist) normal a b)))))))
+            (collision-> contacts (- total-r dist) normal a b)))))))
 
 ;; ---------------------------------------------------------------------
 ;; Circle to Poly and Poly to Circle Collision
@@ -64,7 +92,7 @@
       (if (< sep 0.0001)
         (let [normal (mul-vr (mmul42 (geo/rotation-matrix b)
                                      (nth normals n-idx)) -1.0)]
-          (Collision. [(add (mul-vr normal radius)
+          (collision-> [(add (mul-vr normal radius)
                             (geo/position a))]
                       radius
                       normal
@@ -85,7 +113,7 @@
                                     (sub v1 center)))
                     contact (add (mmul42 (geo/rotation-matrix b) v1)
                                  (geo/position b))]
-                (Collision. [contact] depth normal a b)))
+                (collision-> [contact] depth normal a b)))
 
             ;;closer to v2
             (<= dot2 0.0)
@@ -96,7 +124,7 @@
                                     (sub v2 center)))
                     contact (add (mmul42 (geo/rotation-matrix b) v2)
                                  (geo/position b))]
-                (Collision. [contact] depth normal a b)))
+                (collision-> [contact] depth normal a b)))
 
             ;;closest to face
             :else
@@ -105,14 +133,15 @@
                                  -1.0)
                   contact (add (mul-vr normal radius)
                                (geo/position a))]
-              (Collision. [contact] depth normal a b))))))))
+              (collision-> [contact] depth normal a b))))))))
 
 
 (defn poly->circle [body1 body2]
   (when-let [collision (circle->poly body2 body1)]
-    (-> (update collision :normal mul-vr -1.0)
-        (assoc :a (:b collision))
-        (assoc :b (:a collision)))))
+    (collision->
+     (-> (update collision :normal mul-vr -1.0)
+         (assoc :a (:b collision))
+         (assoc :b (:a collision))))))
 
 ;; ---------------------------------------------------------------------
 ;; Poly to Poly Collision
@@ -249,12 +278,13 @@
                                       (update :contacts (fnil conj []) ifn2)
                                       (update :depth + (* -1.0 d-tmp)))
                                   col-tmp)]
-                    (-> col-tmp
-                        (assoc :a orig-a :b orig-b)
-                        (update :depth / (double (count (:contacts col-tmp))))
-                        (assoc :normal (if flip
-                                         (mul-vr ref-face-norm -1.0)
-                                         ref-face-norm)))))))))))))
+                    (collision->
+                     (-> col-tmp
+                         (assoc :a orig-a :b orig-b)
+                         (update :depth / (double (count (:contacts col-tmp))))
+                         (assoc :normal (if flip
+                                          (mul-vr ref-face-norm -1.0)
+                                          ref-face-norm))))))))))))))
 
 
 (defn collision [body1 body2]
