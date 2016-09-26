@@ -28,9 +28,9 @@
                (mul-vr normal depth)
                normal
                (perp normal)
-               (max (geo/restitution a) (geo/restitution b))
-               (max (geo/dynamic-friction a) (geo/dynamic-friction b))
-               (max (geo/static-friction a) (geo/static-friction b))
+               (min (geo/restitution a) (geo/restitution b))
+               (js/Math.sqrt (* (geo/dynamic-friction a) (geo/dynamic-friction b)))
+               (js/Math.sqrt (* (geo/static-friction a) (geo/static-friction b)))
                0.0
                a
                b)))

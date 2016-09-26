@@ -2,7 +2,7 @@
   (:require [clojure.core.matrix :as matrix]
             [peli.geometry :as geo]
             [peli.phy-math :refer [sub add dot cross-vr cross-rv
-                                   cross-vv mul-vr dist-sqr]]))
+                                   cross-vv mul-vr dist-sqr =*]]))
 
 ;; ---------------------------------------------------------------------
 ;; Helper Function
@@ -17,7 +17,7 @@
 ;; ---------------------------------------------------------------------
 ;; Force Functions
 
-(def gravity-scale 60.0)
+(def gravity-scale 40.0)
 (def default-gravity [0 (* 10.0 gravity-scale)])
 (def default-dt (/ 1.0 60.0))
 
@@ -81,12 +81,18 @@
 
 
 (defn apply-impulse [body impulse contact-vec]
-  #_(println "AI:" body impulse contact-vec)
-  (-> body
-      (geo/linear-velocity
-       (add (geo/linear-velocity body)
-                   (mul-vr impulse (geo/inv-mass body))))
-      (geo/angular-velocity
-       (+ (geo/angular-velocity body)
-          (* (geo/inv-moment-i body)
-             (cross-vv contact-vec impulse))))))
+  #_(println "AI:" (:id body) impulse contact-vec)
+  (let [res (-> body
+                (geo/linear-velocity
+                 (add (geo/linear-velocity body)
+                      (mul-vr impulse (geo/inv-mass body))))
+                (geo/angular-velocity
+                 (+ (geo/angular-velocity body)
+                    (* (geo/inv-moment-i body)
+                       (cross-vv contact-vec impulse)))))]
+    #_(println :AI (:id body)
+             (geo/linear-velocity body)
+             (geo/linear-velocity res)
+             (geo/angular-velocity body)
+             (geo/angular-velocity res))
+    res))

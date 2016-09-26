@@ -23,7 +23,7 @@
                                     :position [50.0 250.0]
                                     :radius 35.0
                                     :density 1})
-                (phy/apply-force [1050.0 0.0] [[15.0 260.0]] 1000.0))]
+                (phy/apply-force [1150.0 0.0] [[15.0 260.0]] 1000.0))]
      (println "B1:" b1)
      {:bodies {:box1 b1
 
@@ -60,6 +60,7 @@
                                     :width 50.0
                                     :height 50.0
                                     :density 1})
+
                :b6 (geo/create-circle {:id :b6
                                        :position [55.0 500.0]
                                        :radius 35.0
@@ -176,7 +177,6 @@
      (let [dt phy/default-dt
            body-map (:bodies db)
            bodies (vals body-map)
-           #_#_ _ (println :BODIES (keys body-map))
            body-map (zipmap (keys body-map)
                             (map #(-> %
                                       (phy/apply-gravity phy/default-gravity dt)
@@ -186,13 +186,10 @@
                       (add-items-to-matrix block-size (vals body-map)))
            db (assoc db :matrix matrix)
            pairs (generate-collision-list matrix block-size [[0 0] [width height]])
-
            collisions (test-collisions body-map pairs)]
        (if-not (empty? collisions)
          (let [colls (res/collision-response collisions dt phy/default-gravity)
                [bodies colls imp-map] (res/solve-positions colls (:imp-map db {}))
-               #_#__ (println :BM (keys body-map))
-               #_#__ (println :bodies bodies)
                body-map (reduce (fn [bm body]
                                   (assoc bm (geo/id body) body))
                              body-map

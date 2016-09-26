@@ -8,6 +8,7 @@
                                    transpose normalize clamp
                                    perp]]))
 
+(declare solve-positions)
 
 (defn gravity-check-fn [a b dt gravity]
   (fn [rest contact]
@@ -23,24 +24,13 @@
         rest))))
 
 
-(defn add-collision-setup [dt gravity collision]
-  (let [{:keys [a b]} collision
-        restitution (min (geo/restitution a)
-                         (geo/restitution b))
-        static-friction (js/Math.sqrt (* (geo/static-friction a)
-                                         (geo/static-friction b)))
-        dynamic-friction (js/Math.sqrt (* (geo/dynamic-friction a)
-                                          (geo/dynamic-friction b)))
-        ;;no restitution if gravity the only thing acting on a resting object
-        restitution (if gravity
+(defn add-collision-setup [dt gravity {:keys [a b restitution] :as col}]
+  (let [restitution (if gravity
                       (reduce (gravity-check-fn a b dt gravity)
                               restitution
-                              (:contacts collision))
+                              (:contacts col))
                       restitution)]
-    (assoc collision
-           :rest-c restitution
-           :sf-c static-friction
-           :df-c dynamic-friction)))
+    (assoc col :restitution restitution)))
 
 
 (defn infinit-mass-correction [collision]
@@ -56,7 +46,10 @@
 
 
 (defn apply-impulse [collision]
-  (let [{:keys [a b contacts normal depth rest-c sf-c df-c]} collision
+  (let [{:keys [a b contacts normal depth]
+         rest-c :restitution
+         sf-c :static-friction
+         df-c :dynamic-friction} collision
         orig-a a
         orig-b b
         pos-a (geo/position a)
@@ -70,8 +63,8 @@
                (geo/inv-mass b)) 0.0)
       (infinit-mass-correction collision)
       (reduce
-       (fn [coll contact]
-         (let [{:keys [a b]} coll
+       (fn [collision contact]
+         (let [{:keys [a b]} collision
                ra (sub contact pos-a)
                rb (sub contact pos-b)
                rv (sub (sub (add
@@ -90,8 +83,9 @@
                                       imi-a)
                                    (* (sqr rb-cross-n)
                                       imi-b))
+                   rc (if (< 0.0 rest-c) 0.0 rest-c)
                    imp (/ (/ (* -1.0
-                                  (+ 1.0 rest-c)
+                                  (+ 1.0 rc)
                                   contact-vel)
                                inv-mass-sum)
                             c-cnt)
@@ -113,17 +107,6 @@
                    tan (/ (/ (* -1.0 (dot rv t))
                              inv-mass-sum)
                           c-cnt)]
-               #_(println :TAN_RV tan t rv inv-mass-sum orig-a orig-b
-                        (cross-rv (geo/angular-velocity orig-b) rb)
-                        (cross-rv (geo/angular-velocity orig-a) ra)
-                        (add (geo/linear-velocity orig-b)
-                                     (cross-rv (geo/angular-velocity orig-b) rb))
-                        (sub (add (geo/linear-velocity orig-b)
-                                     (cross-rv (geo/angular-velocity orig-b) rb))
-                             (geo/linear-velocity orig-a))
-                        (sub rv (mul-vr normal (dot rv normal)))
-                        (dot rv normal)
-                        normal)
                (if (=* tan 0.0)
                  (assoc collision :a a :b b)
                  (let [tan-impulse (if (< (js/Math.abs tan)
@@ -136,8 +119,8 @@
        collision
        (:contacts collision)))))
 
-(def k-slop 0.05)
-(def percent 0.4)
+(def k-slop 0.005)
+(def percent 0.8)
 
 (defn position-correction-single [collision]
   (let [{:keys [depth normal a b]} collision
@@ -162,20 +145,14 @@
                                    (let [a (get bodies (geo/id a) a)
                                          b (get bodies (geo/id b) b)
                                          collision (assoc collision :a a :b b)
-                                         {:keys [a b]} (-> (apply-impulse collision)
-                                                           #_position-correction-single)]
+                                         {:keys [a b]} (apply-impulse collision)]
                                      (assoc bodies
                                             (geo/id a) a
                                             (geo/id b) b)))
-                                 {}
+                                 bodies
                                  collisions))
                        {}
-                       ;;In mutable version this was set to 10
-                       ;;interations, due to a fix I put in using
-                       ;;immutable data structures I don't think
-                       ;;it is required to do multiple iterations
-                       ;;to get stability.
-                       (range 1))]
+                       (range 6))]
     (mapv (fn [{:keys [a b] :as col}]
             (assoc col
                    :a (get bodies (geo/id a))
@@ -197,7 +174,7 @@
           {}
           collisions))
 
-(def pos-dampen 0.9)
+(def pos-dampen 0.8)
 
 (defn contact-share* [cnt]
   (/ pos-dampen cnt))
@@ -220,7 +197,7 @@
                  (fn [imp-map {:keys [a b normal separation]}]
                    (if (< separation 0)
                      imp-map
-                     (let [pos-imp (* scale (- separation k-slop))
+                     (let [pos-imp (* scale (max (- separation k-slop) 0.0))
                            pos-imp (if (or (is-static? a)
                                            (is-static? b))
                                      (* pos-imp 2.0)
@@ -262,12 +239,6 @@
 (def pos-warming 0.8)
 (def pos-scale 0.2)
 
-(def vel-iterations 4)
-(def vel-scale 0.2)
-
-(def fric-multiplyer 5)
-(def rest-thresh 4.0)
-(def rest-thresh-tan 6.0)
 
 (defn has-static? [{:keys [a b]}]
   (or (is-static? a)
@@ -290,132 +261,3 @@
         imp-map (zipmap (keys imp-map)
                         (map #(mul-vr % pos-warming) (vals imp-map)))]
     [bodies colls imp-map]))
-
-(defn contact-id [a b contact]
-  [(geo/id a) (geo/id b) contact])
-
-(defn solve-velocity* [res-map bodies collisions scale]
-  (let [scale-sqr (* scale scale)]
-    (reduce
-     (fn [[res-map bodies] {:keys [contacts depth penetration
-                                   normal tangent a b
-                                   restitution
-                                   dynamic-friction
-                                   static-friction
-                                   separation]}]
-       (let [contact-share (/ 1 (count contacts))
-             a-id (geo/id a)
-             b-id (geo/id b)
-             a (get bodies a-id)
-             b (get bodies b-id)
-             a-pos (geo/position a)
-             b-pos (geo/position b)
-             a-rot (geo/rotation a)
-             b-rot (geo/rotation b)
-             a-pos-prev (geo/prev-position a)
-             b-pos-prev (geo/prev-position b)
-             a-rot-prev (geo/prev-rotation a)
-             b-rot-prev (geo/prev-rotation b)
-             a (-> a
-                   (geo/linear-velocity (sub a-pos a-pos-prev))
-                   (geo/angular-velocity (- a-rot a-rot-prev)))
-             b (-> a
-                   (geo/linear-velocity (sub b-pos b-pos-prev))
-                   (geo/angular-velocity (- b-rot b-rot-prev)))]
-         (reduce
-          (fn [[res-map bodies] contact]
-            (let [vel-a (geo/linear-velocity a)
-                  vel-b (geo/linear-velocity b)
-                  a-vel-a (geo/angular-velocity a)
-                  a-vel-b (geo/angular-velocity b)
-                  cid (contact-id a b contact)
-                  ra (sub contact a-pos)
-                  rb (sub contact b-pos)
-                  vel-point-a (add vel-a (mul-vr (perp ra) a-vel-a))
-                  vel-point-b (add vel-b (mul-vr (perp rb) a-vel-b))
-                  rel-vel (sub vel-point-a vel-point-b)
-                  norm-vel (dot normal rel-vel)
-                  tan-vel (dot tangent rel-vel)
-                  tan-speed (js/Math.abs tan-vel)
-                  tan-vel-dir (if (neg? tan-vel) -1 1)
-                  norm-imp (/ (+ 1.0 restitution) norm-vel)
-                  norm-force (* (clamp (+ separation norm-vel) 0.0 1.0)
-                                fric-multiplyer)
-                  [max-fric tan-imp] (if-not (> tan-speed
-                                                (* dynamic-friction
-                                                   static-friction
-                                                   norm-force
-                                                   scale-sqr))
-                                       [js/Number.POSITIVE_INFINITY tan-vel]
-                                       [tan-speed (clamp (* dynamic-friction
-                                                            tan-vel-dir
-                                                            scale-sqr)
-                                                         (* -1.0 tan-speed)
-                                                         tan-speed)])
-                  oacn (cross-vv ra normal)
-                  obcn (cross-vv rb normal)
-                  a-inv-m (geo/inv-mass a)
-                  b-inv-m (geo/inv-mass b)
-                  a-inv-mi (geo/inv-moment-i a)
-                  b-inv-mi (geo/inv-moment-i b)
-                  share (/ contact-share
-                           (+ a-inv-m
-                              b-inv-m
-                              (* a-inv-mi oacn oacn)
-                              (* a-inv-mi obcn obcn)))
-                  tan-imp (* tan-imp share)
-                  norm-imp (* norm-imp share)
-                  [c-norm-imp c-tan-imp] (get res-map cid [0.0 0.0])
-                  [norm-imp c-norm-imp] (if (and (< norm-vel 0)
-                                                 (> (* norm-vel norm-vel)
-                                                    (* rest-thresh scale-sqr)))
-                                          [norm-imp 0.0]
-                                          [(let [cimp (min (+ c-norm-imp
-                                                              norm-imp) 0)]
-                                             [(- c-norm-imp cimp)
-                                              cimp])])
-                  [tan-imp c-tan-imp] (if (> (* tan-vel tan-vel)
-                                             (* rest-thresh scale-sqr))
-                                        [tan-imp 0.0]
-                                        [(let [cimp (clamp (+ c-tan-imp tan-imp)
-                                                           (* -1.0 max-fric)
-                                                           max-fric)]
-                                           [(- c-tan-imp cimp)
-                                            cimp])])
-                  [nx ny] normal
-                  [tx ty] tangent
-                  imp [(+ (* nx norm-imp) (* tx tan-imp))
-                       (+ (* ny norm-imp) (* ty tan-imp))]
-                  bodies (cond-> bodies
-                           (is-static? a)
-                           (assoc a-id
-                                  (-> a
-                                      (geo/prev-position
-                                       (add (geo/prev-position a)
-                                            (mul-vr imp a-inv-m)))
-                                      (geo/prev-rotation
-                                       (+ (geo/prev-rotation a)
-                                          (* (cross-vv ra imp)
-                                             a-inv-mi)))))
-                           (is-static? b)
-                           (assoc b-id
-                                  (-> b
-                                      (geo/prev-position
-                                       (sub (geo/prev-position b)
-                                            (mul-vr imp b-inv-m)))
-                                      (geo/prev-rotation
-                                       (- (geo/prev-rotation a)
-                                          (* (cross-vv rb imp)
-                                             b-inv-mi))))))]
-              [(assoc res-map cid [c-norm-imp c-tan-imp])
-               bodies]))
-          [res-map bodies]
-          contacts)))
-     [res-map bodies]
-     collisions)))
-
-(defn solve-velocity [bodies collisions]
-  (reduce (fn [[res-map bodies] iter]
-            (solve-velocity res-map bodies collisions vel-scale))
-          [{} bodies]
-          (range vel-iterations)))

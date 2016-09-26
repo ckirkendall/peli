@@ -307,7 +307,7 @@
                            linear-velocity [0.0 0.0]
                            angular-velocity 0.0
                            restitution 0.2
-                           dynamic-friction 0.3
+                           dynamic-friction 0.1
                            static-friction 0.5}}]
   (-> (map->Circle {:id id
                     :position position
@@ -339,8 +339,8 @@
                         linear-velocity [0.0 0.0]
                         angular-velocity 0.0
                         restitution 0.2
-                        dynamic-friction 0.3
-                        static-friction 0.5}}]
+                        dynamic-friction 0.2
+                        static-friction 0.8}}]
   (let [points [[(* -1.0 (/ width 2.0))
                  (* -1.0 (/ height 2.0))]
                 [(/ width 2.0)
