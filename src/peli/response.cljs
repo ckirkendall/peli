@@ -68,10 +68,10 @@
                ra (sub contact pos-a)
                rb (sub contact pos-b)
                rv (sub (sub (add
-                             (geo/linear-velocity orig-b)
-                             (cross-rv (geo/angular-velocity orig-b) rb))
-                         (geo/linear-velocity orig-a))
-                    (cross-rv (geo/angular-velocity orig-a) ra))
+                             (geo/linear-velocity b)
+                             (cross-rv (geo/angular-velocity b) rb))
+                         (geo/linear-velocity a))
+                    (cross-rv (geo/angular-velocity a) ra))
                contact-vel (dot rv normal)]
            (if (> contact-vel 0.0)
              collision
@@ -91,16 +91,13 @@
                             c-cnt)
                    ;; Apply Impulse
                    impulse (mul-vr normal imp)
-
-                   orig-a (phy/apply-impulse orig-a (mul-vr impulse -1.0) ra)
-                   orig-b (phy/apply-impulse orig-b impulse rb)
                    a (phy/apply-impulse a (mul-vr impulse -1.0) ra)
                    b (phy/apply-impulse b impulse rb)
                    ;; Friction impulse
-                   rv (sub (sub (add (geo/linear-velocity orig-b)
-                                     (cross-rv (geo/angular-velocity orig-b) rb))
-                             (geo/linear-velocity orig-a))
-                        (cross-rv (geo/angular-velocity orig-a) ra))
+                   rv (sub (sub (add (geo/linear-velocity b)
+                                     (cross-rv (geo/angular-velocity b) rb))
+                             (geo/linear-velocity a))
+                        (cross-rv (geo/angular-velocity a) ra))
                    t (normalize
                       (sub rv (mul-vr normal (dot rv normal))))
                    ;; Tangent magnitude
@@ -146,12 +143,12 @@
                                          b (get bodies (geo/id b) b)
                                          collision (assoc collision :a a :b b)
                                          {:keys [a b]} (apply-impulse collision)]
-                                     (assoc bodies
+                                     (assoc! bodies
                                             (geo/id a) a
                                             (geo/id b) b)))
                                  bodies
                                  collisions))
-                       {}
+                       (transient {})
                        (range 6))]
     (mapv (fn [{:keys [a b] :as col}]
             (assoc col
@@ -164,26 +161,28 @@
   (and (= (geo/inv-mass body) 0.0)
        (= (geo/inv-moment-i body) 0.0)))
 
+
+(def pos-dampen 0.8)
+(defn contact-share [cnt]
+  (/ pos-dampen cnt))
+
+
 (defn pre-position-solver
   "takes a list of collisions and returns a map of id -> total contact count"
   [collisions]
-  (reduce (fn [contact-cnt-map {:keys [contacts a b]}]
-            (-> contact-cnt-map
-                (update (:id a) (fnil + 0) (count contacts))
-                (update (:id b) (fnil + 0) (count contacts))))
-          {}
-          collisions))
+  (let [cnm  (reduce (fn [cnm {:keys [contacts a b]}]
+                       (-> cnm
+                           (update (:id a) (fnil + 0) (count contacts))
+                           (update (:id b) (fnil + 0) (count contacts))))
+                     {}
+                     collisions)]
+    (zipmap (keys cnm) (map contact-share (vals cnm)))))
 
-(def pos-dampen 0.8)
 
-(defn contact-share* [cnt]
-  (/ pos-dampen cnt))
-
-(def contact-share (memoize contact-share*))
 
 (defn solve-positions*
   "takes a list of collisions and returns a map of id -> position impulse [x y]"
-  [collisions pos-impulse-map contact-cnt-map scale]
+  [collisions pos-impulse-map contact-share-map scale]
   (let [colls (map (fn [{:keys [a b depth normal penetration] :as col}]
                      (let [imp-a (get pos-impulse-map (geo/id a) [0 0])
                            imp-b (get pos-impulse-map (geo/id b) [0 0])
@@ -211,14 +210,14 @@
                          (not (is-static? a))
                          (assoc
                           (:id a)
-                          (let [cs (contact-share (get contact-cnt-map id-a))]
+                          (let [cs (get contact-share-map id-a)]
                             [(- imp-x-a (* n-x pos-imp cs))
                              (- imp-y-a (* n-y pos-imp cs))]))
 
                          (not (is-static? b))
                          (assoc
                           (:id b)
-                          (let [cs (contact-share (get contact-cnt-map id-b))]
+                          (let [cs (get contact-share-map id-b)]
                             [(+ imp-x-b (* n-x pos-imp cs))
                              (+ imp-y-b (* n-y pos-imp cs))]))))))
                         pos-impulse-map

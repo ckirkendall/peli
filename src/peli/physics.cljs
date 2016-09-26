@@ -2,15 +2,16 @@
   (:require [clojure.core.matrix :as matrix]
             [peli.geometry :as geo]
             [peli.phy-math :refer [sub add dot cross-vr cross-rv
-                                   cross-vv mul-vr dist-sqr =*]]))
+                                   cross-vv mul-vr dist-sqr =*
+                                   normalize]]))
 
 ;; ---------------------------------------------------------------------
 ;; Helper Function
 
 (defn- break-force-up [position point force]
   (let [[rx ry :as r-vec] (sub position point)
-        r-unit (matrix/normalise r-vec)
-        linear-proj (mul-vr r-unit (matrix/dot force r-unit))
+        r-unit (normalize r-vec)
+        linear-proj (mul-vr r-unit (dot force r-unit))
         ang-proj (sub force linear-proj)]
     [linear-proj ang-proj]))
 
@@ -37,10 +38,11 @@
                                    (mul-vr linear-accel dt)))))
 
 
-(defn apply-force [body force points dt]
+(defn apply-force [body [xf yf] points dt]
   (if-not (and (= (geo/inv-mass body) 0.0)
                (= (geo/inv-moment-i body) 0.0))
-    (let [partial-force (matrix/div force (count points))
+    (let [partial-force [(/ xf (double (count points)))
+                         (/ yf (double (count points)))]
           forces (reduce (fn [[linear angular] point]
                            (let [[l a] (break-force-up (geo/position body)
                                                        point

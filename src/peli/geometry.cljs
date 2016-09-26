@@ -1,6 +1,7 @@
 (ns peli.geometry
   (:require [clojure.core.matrix :as matrix]
-            [peli.phy-math :refer [add sub cross-vv mul-vr]]))
+            [peli.phy-math :refer [add sub cross-vv mul-vr mmul42
+                                   normalize]]))
 
 ;; ---------------------------------------------------------------------
 ;; Protocols
@@ -50,8 +51,8 @@
 ;; Internal Helper Functions
 
 (defn- create-points [body]
-  (mapv #(matrix/add (matrix/mmul (rotation-matrix body) %)
-                     (position body))
+  (mapv #(add (mmul42 (rotation-matrix body) %)
+              (position body))
         (rel-points body)))
 
 
@@ -68,13 +69,13 @@
 
 
 (defn- find-perp-norm [[x y]]
-  (matrix/normalise [(* y -1.0) x]))
+  (normalize [(* y -1.0) x]))
 
 (defn- find-normals [[p1 :as points]]
   (let [full-points (conj points p1)]
     (first
      (reduce (fn [[axes prev-point] point]
-               (let [a (-> (matrix/sub prev-point point)
+               (let [a (-> (sub prev-point point)
                            find-perp-norm)]
                  [(conj axes a)
                   point]))

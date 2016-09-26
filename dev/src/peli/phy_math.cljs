@@ -38,6 +38,9 @@
 (defn mul-rv [r [x y]]
   [(* x r) (* y r)])
 
+(defn div-vr [[x y] r]
+  [(/ x r) (/ y r)])
+
 (defn mmul42 [[[a b] [c d]] [x y]]
   [(+ (* a x) (* b y)) (+ (* c x) (* d y))])
 

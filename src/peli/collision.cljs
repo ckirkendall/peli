@@ -3,7 +3,7 @@
             [clojure.core.matrix :as matrix]
             [peli.phy-math :refer [sub add dot cross-vr cross-rv
                                    cross-vv mul-vr dist-sqr mmul42
-                                   perp]]))
+                                   perp transpose div-vr normalize]]))
 
 
 (defrecord Collision [contacts
@@ -53,7 +53,7 @@
       (let [dist (js/Math.sqrt dist-sqr)]
         (if (= 0.0 dist)
           (collision-> [(geo/position a)] (geo/radius a) [1 0] a b)
-          (let [normal (matrix/div normal dist)
+          (let [normal (div-vr normal dist)
                 contacts [(add (mul-vr normal (geo/radius a))
                                (geo/position a))]]
             (collision-> contacts (- total-r dist) normal a b)))))))
@@ -64,7 +64,7 @@
 (defn circle->poly [a b]
   (let [;; Translate a into b's local space
         radius (geo/radius a)
-        center (mmul42 (matrix/transpose (geo/rotation-matrix b))
+        center (mmul42 (transpose (geo/rotation-matrix b))
                        (sub (geo/position a) (geo/position b)))
         points (geo/rel-points b)
         normals (geo/normals b)
@@ -108,7 +108,7 @@
             (<= dot1 0.0)
             (when (<= (dist-sqr center v1)
                       (* radius radius))
-              (let [normal (matrix/normalise
+              (let [normal (normalize
                             (mmul42 (geo/rotation-matrix b)
                                     (sub v1 center)))
                     contact (add (mmul42 (geo/rotation-matrix b) v1)
@@ -119,7 +119,7 @@
             (<= dot2 0.0)
             (when (<= (dist-sqr center v2)
                       (* radius radius))
-              (let [normal (matrix/normalise
+              (let [normal (normalize
                             (mmul42 (geo/rotation-matrix b)
                                     (sub v2 center)))
                     contact (add (mmul42 (geo/rotation-matrix b) v2)
@@ -165,7 +165,7 @@
         b-rot-mat (geo/rotation-matrix b)
         b-pos (geo/position b)
         a-pos (geo/position a)
-        b-rot-mat-trans (matrix/transpose b-rot-mat)]
+        b-rot-mat-trans (transpose b-rot-mat)]
     (reduce (fn [[best-axis depth] idx]
               (let [;; retrieve face normal from A
                     n-tmp (nth normals idx)
@@ -196,7 +196,7 @@
         ref-norm-tmp (nth a-norms ref-idx)
         ;;translate to frame of reference
         ref-norm (mmul42
-                  (matrix/transpose b-rot-mat)
+                  (transpose b-rot-mat)
                   (mmul42 a-rot-mat ref-norm-tmp))
         [iface min-dot] (reduce (fn [[iface min-dot] idx]
                                   (let [dot (dot ref-norm
@@ -251,7 +251,7 @@
                 v1 (add (mmul42 a-rot-mat v1-tmp) a-pos)
                 v2 (add (mmul42 a-rot-mat v2-tmp) a-pos)
                 ;; side plane normal in world space
-                [sx sy :as side-plane-norm] (matrix/normalise (sub v2 v1))
+                [sx sy :as side-plane-norm] (normalize (sub v2 v1))
                 ;; orthogonalize
                 ref-face-norm [sy (* sx -1.0)]
 

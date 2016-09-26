@@ -156,17 +156,17 @@
 
 
 (defn generate-pairs [[el & next]]
-  (if (empty? next) #{}
+  (if (empty? next) []
       (into (generate-pairs next)
             (map #(do #{el %}) next))))
 
 (defn generate-collision-list [matrix block-size expanded-frame]
   (let [[col row max-col max-row] (matrix-bounds block-size
                                                  expanded-frame)])
-  (apply s/union
-    (for [row matrix
-          items row]
-      (generate-pairs (seq items)))))
+  (into #{}
+        (apply concat (for [row matrix
+                            items row]
+                        (generate-pairs (seq items))))))
 
 
 
