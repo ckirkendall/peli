@@ -13,7 +13,8 @@
   :source-paths ["src"]
   :test-paths ["test"]
   :doo {:build "test"}
-  :profiles {:dev {:plugins [[lein-cljsbuild "1.1.4"]
+  :profiles {:dev {:dependencies [[cljsjs/pixi "3.0.10-0"]]
+                   :plugins [[lein-cljsbuild "1.1.4"]
                              [lein-figwheel "0.5.6"]
                              [lein-doo "0.1.7"]]
                    :resource-paths ["dev/resources"]

@@ -4,17 +4,19 @@
    [reagent.ratom :refer [reaction]])
   (:require
    [reagent.core :as reagent]
+   [re-frame.db :as re-frame-db]
    [cljs.core.async :refer [<! timeout]]
    [re-frame.core :as re-frame]
    [peli.physics :as phy]
    [peli.geometry :as geo]
    [peli.collision :as coll]
    [peli.response :as res]
-   [clojure.set :as s]))
+   [clojure.set :as s]
+   [peli.phy-math :refer [sub]]))
 
 (def width 600.0)
 (def height 600.0)
-(def block-size 30)
+(def block-size 40)
 
 (re-frame/register-handler
  ::init
@@ -111,7 +113,7 @@
   (reduce (fn [colls pair]
             (let [o1 (get db (first pair))
                   o2 (get db (second pair))]
-              (if-not (= 0 (geo/inv-mass o1) (geo/inv-mass o2))
+              (if-not (= 0 (p/inv-mass o1) (p/inv-mass o2))
                 (if-let [collision (coll/collision o1 o2)]
                   (conj colls collision)
                   colls)
@@ -121,85 +123,69 @@
 
 
 
-(defn matrix-bounds [block-size [[x1 y1] [x2 y2]]]
-  (let [col (max (Math/floor (/ x1 block-size)) 0)
-        row (max (Math/floor (/ y1 block-size)) 0)
-        max-col (max (Math/floor (/ x2 block-size)) 0)
-        max-row (max (Math/floor (/ y2 block-size)) 0)]
-    [col row max-col max-row]))
+(defn check-active [bodies rest-cnt-map]
+  [rest-cnt-map bodies]
+  (reduce (fn [[rest-cnt-map bodies] body]
+            (let [rest-cnt (get rest-cnt-map (p/id body) 0)
+                  [dx dy] (sub (p/prev-position body)
+                       (p/position body))
+                  dr (- (p/rotation body)
+                        (p/prev-rotation body))
+                  #_#__ (println dx dy dr)
+                  rest-cnt (if (and (> (p/inv-mass body) 0.0)
+                                    (< (js/Math.abs dx) 0.1)
+                                    (< (js/Math.abs dy) 0.1)
+                                    (< (js/Math.abs dr) 0.01))
+                             (inc rest-cnt)
+                             0)]
+              [(assoc rest-cnt-map (p/id body) rest-cnt)
+               (conj bodies (cond-> body
+                              (= rest-cnt 0)
+                              (p/active true)
+
+                              (> rest-cnt 10)
+                              (p/active false)))]))
+          [rest-cnt-map []]
+          bodies))
 
 
-(defn add-item-to-matrix [matrix block-size {:keys [id] :as item}]
-  (let [[col row max-col max-row] (matrix-bounds block-size (geo/bounds item))]
-    (reduce (fn [m row]
-              (reduce (fn [m col]
-                        (update-in m [row col] (fnil conj #{}) id))
-                      m
-                      (range col (inc max-col))))
-            matrix
-            (range row (inc max-row)))))
+(defn apply-physics [body gravity dt]
+  (-> body
+      (phy/apply-gravity gravity dt)
+      (phy/apply-physics dt)))
 
-
-(defn add-items-to-matrix [matrix block-size items]
-  (reduce (fn [m item]
-            (add-item-to-matrix m block-size item))
-          matrix
-          items))
-
-
-(defn build-matrix [block-size width height]
-  (let [num-cols (inc (Math/floor (/ width block-size)))
-        num-rows (inc (Math/floor (/ height block-size)))]
-    (mapv (fn [row]
-            (mapv (fn [col] nil) (range num-cols)))
-          (range num-rows))))
-
-
-(defn generate-pairs [[el & next]]
-  (if (empty? next) []
-      (into (generate-pairs next)
-            (map #(do #{el %}) next))))
-
-(defn generate-collision-list [matrix block-size expanded-frame]
-  (let [[col row max-col max-row] (matrix-bounds block-size
-                                                 expanded-frame)])
-  (into #{}
-        (apply concat (for [row matrix
-                            items row]
-                        (generate-pairs (seq items))))))
-
+(defn step [db dt]
+  (if-not (:collision db)
+    (let [gravity [0.0 500.0] #_ phy/default-gravity
+          body-map (:bodies db)
+          [rest-cnt-map bodies] (check-active (vals body-map) (:rest-cnt-map db {}))
+          body-map (zipmap (keys body-map)
+                           (map #(apply-physics % gravity dt) bodies))
+          [pairs matrix] (coll/generate-pairs block-size bodies)
+          db (assoc db
+                    :matrix matrix
+                    :rest-cnt-map rest-cnt-map)
+          collisions (test-collisions body-map pairs)]
+      (if-not (empty? collisions)
+        (let [colls (res/collision-response collisions dt gravity)
+              [bodies colls imp-map] (res/solve-positions colls (:imp-map db {}))
+              body-map (reduce (fn [bm body]
+                                 (assoc bm (p/id body) body))
+                               body-map
+                               bodies)]
+          (assoc db
+                 :bodies body-map
+                 :imp-map imp-map
+                 #_#_:collision colls))
+        (assoc db :bodies body-map
+               #_#_:collision :hold)))
+    db))
 
 
 (re-frame/register-handler
  ::step
  (fn [db _]
-   (if-not (:collision db)
-     (let [dt phy/default-dt
-           body-map (:bodies db)
-           bodies (vals body-map)
-           body-map (zipmap (keys body-map)
-                            (map #(-> %
-                                      (phy/apply-gravity phy/default-gravity dt)
-                                      (phy/apply-physics dt))
-                              bodies))
-           matrix (-> (build-matrix block-size (int width) (int height))
-                      (add-items-to-matrix block-size (vals body-map)))
-           db (assoc db :matrix matrix)
-           pairs (generate-collision-list matrix block-size [[0 0] [width height]])
-           collisions (test-collisions body-map pairs)]
-       (if-not (empty? collisions)
-         (let [colls (res/collision-response collisions dt phy/default-gravity)
-               [bodies colls imp-map] (res/solve-positions colls (:imp-map db {}))
-               body-map (reduce (fn [bm body]
-                                  (assoc bm (geo/id body) body))
-                             body-map
-                             bodies)]
-           (assoc db
-                  :bodies body-map
-                  :imp-map imp-map
-                  #_#_:collision colls))
-         (assoc db :bodies body-map)))
-     db)))
+   (step db phy/default-dt)))
 
 
 (re-frame/register-sub
@@ -210,90 +196,116 @@
 (re-frame/register-sub
  ::matrix
  (fn [db _]
-   (reaction (:matrix @db))))
+   (reaction (dissoc (:matrix @db) :pairs))))
+
+(re-frame/register-sub
+ ::frame-rate
+ (fn [db _]
+   (reaction (:frame-rate @db))))
+
 
 (defn rad->deg [rad]
   (/ (* rad 180.0) Math/PI))
 
+(def active-color "blue")
+(def inactive-color "blue")
 
 (defn draw-box [box]
-  (let [[[fx fy] :as points] (geo/points box)
+  (let [[[fx fy] :as points] (p/points box)
+        active? (p/active box)
         pstr (str (apply str (interpose " " (map (fn [[x y]]
                                                    (str x "," y)) points)))
                            (str " " fx "," fy))]
     [:polygon {:points pstr
               :style {:fill "lightgray"
-                      :stroke "blue"
+                      :stroke (if active? active-color inactive-color)
                       :stroke-width "1"}}]))
 
 (defn draw-circle [body]
-  (let [[x y] (geo/position body)
-        r (geo/radius body)
-        rot (geo/rotation body)]
+  (let [[x y] (p/position body)
+        r (p/radius body)
+        rot (p/rotation body)
+        active? (p/active body)]
     [:g {:transform (str "translate(" x " " y ") "
                          "rotate(" (rad->deg rot) " " 0 " " 0 ")")}
      [:circle {:cx 0 :cy 0 :r r
                :style {:fill "lightgray"
-                       :stroke "blue"
+                       :stroke (if active? active-color inactive-color)
                        :stroke-width "1"}}]
      [:line {:x1 0 :y1 r :x2 0 :y2 0
-             :style {:stroke-width "2" :stroke "blue"}}]]))
+             :style {:stroke-width "2" :stroke (if active? active-color inactive-color)}}]]))
 
 
-(defn draw-matrix-row [row-idx matrix block-size]
-  (let [row (nth matrix row-idx)]
-    [:g
-     (map (fn [idx]
-            (when (nth row idx)
-              ^{:key (str row-idx "_" idx)}
-              [:rect {:x (* block-size idx)
-                      :y (* block-size row-idx)
-                      :width block-size
-                      :height block-size
-                      :style {:stroke "red"
-                              :stroke-width "1"
-                              :stroke-opacity "0.2"
-                              :fill "transparent"}}]))
-       (range (count row)))]))
+(defn draw-matrix-box [block-key block-size]
+  (let [col-idx (mod block-key 1000)
+        row-idx (int (/ (- block-key col-idx) 1000))]
+    [:rect {:x (* block-size col-idx)
+            :y (* block-size row-idx)
+            :width block-size
+            :height block-size
+            :style {:stroke "red"
+                    :stroke-width "1"
+                    :stroke-opacity "0.2"
+                    :fill "transparent"}}]))
 
 (defn draw-matrix [matrix block-size]
   [:g
-   (map (fn [row-idx]
-          ^{:key (str row-idx)}
-          [draw-matrix-row row-idx matrix block-size])
-     (range (count matrix)))])
+   (map (fn [ky]
+          ^{:key (str ky)}
+          [draw-matrix-box ky block-size])
+     (keys matrix))])
 
 (defn bodies->svg []
   (let [bodies (re-frame/subscribe [::bodies])
-        matrix (re-frame/subscribe [::matrix])]
+        matrix (re-frame/subscribe [::matrix])
+        frame-rate (re-frame/subscribe [::frame-rate])]
     (fn []
       (when-not (empty? @bodies)
         [:div
+         [:p (str "FPS: " @frame-rate)]
          [:svg {:width width
                 :height height}
           [:rect {:fill "darkgray"
                   :x 0 :y 0
                   :width width
                   :height height}]
-          #_[draw-matrix @matrix block-size]
+          [draw-matrix @matrix block-size]
           [:g
            (map (fn [body]
                   (cond
-                    (instance? geo/Circle body)
+                    (satifies? p/ICircle body)
                     ^{:key (:id body)} [draw-circle body]
-                    (instance? geo/ConvexPolygon body)
+                    (satifies? p/IPolygon body)
                     ^{:key (:id body)} [draw-box body]))
              @bodies)]]]))))
 
+(def fr-holder (atom (vec (for [iter (range 100)] (/ 1.0 phy/default-dt)))))
+(def target-fps (* 1000 phy/default-dt))
 
-(defn init []
-  (re-frame/dispatch [::init])
-  (go-loop []
-    (<! (timeout (* 1000 phy/default-dt)))
-    (re-frame/dispatch [::step])
-    (recur ))
-  (reagent/render-component
-   [bodies->svg]
-   (js/document.getElementById  "myGameDiv")))
+(defn average
+  [numbers]
+    (/ (apply + numbers) (count numbers)))
 
-(init)
+(defn set-timeout-init
+  ([]
+   (re-frame/dispatch [::init])
+   (let [now (js/Date.now)]
+     (js/window.setTimeout #(set-timeout-init now 0) 16))
+   (reagent/render-component
+    [bodies->svg]
+    (js/document.getElementById  "myGameDiv")))
+  ([time step-cnt]
+   (let [start (js/Date.now)
+         diff (- start time)
+         frame-rate  (int (/ 1000 (+ diff 0.00001)))]
+     (js/window.setTimeout #(set-timeout-init start (mod (inc step-cnt) 100))
+                     target-fps)
+     (swap! fr-holder assoc step-cnt frame-rate)
+     (swap! re-frame.db/app-db
+            (fn [db]
+              (-> db
+                  (assoc :frame-rate (int (average @fr-holder)))
+                  (step (min 0.020 (/ diff 1000)))))))))
+
+
+#_(init)
