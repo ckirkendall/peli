@@ -1,7 +1,7 @@
 (ns peli.impl.game
   (:require [peli.protocols :as p]))
 
-(defrecord World. [id bodies sprites sounds]
+(defrecord World [id bodies sprites sounds gravity]
   p/IIdentity
   (id [this] (:id this))
 
@@ -18,26 +18,24 @@
   (frame [this] (:frame this))
   (frame [this val] (assoc this :frame val))
   (camera-focus [this]
-    (let [id (:camera-focus this)
-          entity (p/entity this id)]
-      (p/position entity)))
+    (when (:camera-focus this)
+      (let [id (:camera-focus this)
+            body (p/body this id)]
+        (p/position (p/shape body)))))
   (camera-focus [this id]
     (assoc this :camera-focus id))
   (body [this id]
     (get-in this [:bodies id]))
   (body [this id val]
-    (assoc-in this [:bodies id] val)))
+    (assoc-in this [:bodies id] val))
+  (gravity [this]
+    (:gravity this [0.0 0.0])))
 
-(defrecord Game. [id worlds block-size fps active-world pos-impulse-map graphics-adapter]
+(defrecord Game [id worlds block-size fps active-world pos-impulse-map graphics-adapter frame-rate]
   p/IIdentity
   (id [this] (:id this))
 
-  p/IInit
-  (init [this]
-    (let [adapter (p/init (p/graphics-adaptor this) this)]
-      (assoc this :graphics-adapter)))
-
-  IGame
+  p/IGame
   (worlds [this] (:worlds this))
   (world [this id] (get-in this [:worlds id]))
   (block-size [this] (:block-size this))
@@ -48,9 +46,10 @@
     (assoc this :active-world (p/world this id)))
   (position-impulses [this] (:pos-impulse-map this))
   (position-impulses [this val] (assoc this :pos-impulse-map val))
-  (graphics-adapter [this val] (:graphics-adpater this))
+  (graphics-adapter [this] (:graphics-adapter this))
+  (graphics-adapter [this val] (assoc this :graphics-adapter val))
 
-  IWorld
+  p/IWorld
   (bodies [this]
     (p/bodies (p/active-world this)))
   (add-body [this body]
@@ -63,17 +62,17 @@
   (frame [this] (p/frame (p/active-world this)))
   (frame [this val] (update this :active-world p/frame val))
   (camera-focus [this]
-    (let [id (:camera-focus (p/active-world this))
-          entity (p/entity this id)]
-      (p/position entity)))
+    (p/camera-focus (p/active-world this)))
   (camera-focus [this id]
     (update this :active-world p/camera-focus id))
   (body [this id]
     (p/body (p/active-world this) id))
   (body [this id val]
     (update this :active-world p/body id val))
+  (gravity [this]
+    (p/gravity (p/active-world this)))
 
-  IGraphicsAdaptor
+  p/IGraphicsAdapter
   (render [this game]
     (assoc this
            :graphics-adapter
@@ -84,7 +83,7 @@
     (p/draw-circle (p/graphics-adapter this) opts))
   (draw-rect [this opts]
     (p/draw-rect (p/graphics-adapter this) opts))
-  (draw-rounded-rec [this opts]
-    (p/draw-rect (p/graphics-adapter this) opts))
+  (draw-rounded-rect [this opts]
+    (p/draw-rounded-rect (p/graphics-adapter this) opts))
   (draw-sprite [this opts]
     (p/draw-sprite (p/graphics-adapter this) opts)))

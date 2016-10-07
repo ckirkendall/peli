@@ -2,7 +2,6 @@
   (:require [peli.protocols :as p]
             [peli.impl.physics :as phy]
             [peli.impl.collision :as coll]
-            [clojure.core.matrix :as matrix]
             [peli.impl.phy-math :refer [sub add dot cross-vr cross-rv
                                         cross-vv mul-vr dist-sqr =*
                                         transpose normalize clamp
@@ -234,15 +233,15 @@
                                                     pos-scale))
                                 [(or pos-impulse-map {}) collisions]
                                 (range pos-iterations))
-        shape-map (reduce (fn [shape-map {:keys [a b]} colls]
-                            (cond-> shape-map
-                              a (assoc shape-map (p/id a) a)
-                              b (assoc shape-map (p/id b) b)))
-                         {}
-                         colls)
-        shape-map (into {} (map (fn [[id shape]]
-                                  [id (post-solve-postion shape impl-map)])
-                             shape-map))
+        shapes (reduce (fn [shapes {:keys [a b]} colls]
+                         (conj shapes a b))
+                       #{}
+                       colls)
+        shape-map (->> shapes
+                       (map #(post-solve-position % imp-map))
+                       (remove nil?)
+                       (map (fn [shape] [(p/id shape) shape]))
+                       (into {}))
         imp-map (zipmap (keys imp-map)
                         (map #(mul-vr % pos-warming) (vals imp-map)))]
     [shape-map imp-map]))

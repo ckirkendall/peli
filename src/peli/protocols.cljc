@@ -4,12 +4,12 @@
 ;; Base
 
 (defprotocol IInit
-  (init [this]))
+  (init [this opts]))
 
 (defprotocol IIdentity
   (id [this]))
 
-(defprotocl IActive
+(defprotocol IActive
   (active [this] [this val]))
 
 ;; ---------------------------------------------------------------------
@@ -33,8 +33,9 @@
   (active-world [this])
   (activate-world [this id])
   (worlds [this])
+  (world [this id])
   (position-impulses [this] [this val])
-  (graphics-adapter [this]))
+  (graphics-adapter [this] [this val]))
 
 
 ;; ---------------------------------------------------------------------
@@ -45,7 +46,7 @@
 
 (defprotocol IBody
   (draw [this game])
-  (shape [this]))
+  (shape [this] [this val]))
 
 (defprotocol IBodyPhysics
   (apply-physics [this dt]))
@@ -85,11 +86,8 @@
   (static-friction [this] [this val])
   (dynamic-friction [this] [this val]))
 
-(defprotocl IBounds
+(defprotocol IBounds
   (bounds [this]))
-
-(defprotocol IFrame
-  (extended-bounds [this]))
 
 (defprotocol IPolygon
   (rel-points [this] [this val])
@@ -108,5 +106,5 @@
   (draw-polygon [this opts])
   (draw-circle [this opts])
   (draw-rect [this opts])
-  (draw-rounded-rec [this opts])
+  (draw-rounded-rect [this opts])
   (draw-sprite [this opts]))

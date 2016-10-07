@@ -3,12 +3,12 @@
 (def epsilon 0.0001)
 
 (def infinity
-  #?(:clj Double/POSITIVE_INFINITY)
-  #?(:cljs js/Number.POSITIVE_INFINITY))
+  #?(:clj Double/POSITIVE_INFINITY
+     :cljs js/Number.POSITIVE_INFINITY))
 
 (def neg-infinity
-  #?(:clj Double/NEGATIVE_INFINITY)
-  #?(:cljs js/Number.NEGATIVE_INFINITY))
+  #?(:clj Double/NEGATIVE_INFINITY
+     :cljs js/Number.NEGATIVE_INFINITY))
 
 (defn abs [val] (Math/abs val))
 
@@ -19,7 +19,7 @@
 (defn ceil [val] (Math/ceil val))
 
 (defn =* [a b]
-  (<=  (js/Math.abs (- a b)) epislon))
+  (<=  (abs (- a b)) epsilon))
 
 (defn perp [[x1 y1]]
   [(* -1.0 y1) x1])
@@ -67,7 +67,7 @@
 
 (defn dist
   ([[x y]]
-   (js/Math.sqrt (+ (* x x) (* y y))))
+   (sqrt (+ (* x x) (* y y))))
   ([p1 p2]
    (dist (sub p1 p2))))
 

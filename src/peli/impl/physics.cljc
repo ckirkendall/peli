@@ -1,6 +1,5 @@
 (ns peli.impl.physics
-  (:require [clojure.core.matrix :as matrix]
-            [peli.protocols :as p]
+  (:require [peli.protocols :as p]
             [peli.impl.phy-math :refer [sub add dot cross-vr cross-rv
                                         cross-vv mul-vr dist-sqr =*
                                         normalize]]))

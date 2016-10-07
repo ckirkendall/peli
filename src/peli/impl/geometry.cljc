@@ -1,6 +1,5 @@
 (ns peli.impl.geometry
-  (:require [clojure.core.matrix :as matrix]
-            [peli.protocls :as p]
+  (:require [peli.protocols :as p]
             [peli.impl.utils :as utils]
             [peli.impl.phy-math :refer [add sub cross-vv mul-vr
                                         mmul42 normalize infinity]]))
@@ -42,7 +41,7 @@
 
 (defn- compute-mass-circle* [body density]
   (let [r (p/radius body)
-        m (* js/Math.PI r r density)]
+        m (* Math/PI r r density)]
     (-> body
         (p/mass m)
         (p/moment-i (* m r r)))))
@@ -109,14 +108,18 @@
   (active [this val] (assoc this :active val))
 
   p/IBody
-  (draw [this]
-    (let [[x y] (p/position this)])
-    (p/draw-circle {:x x :y y :radius (p/radius this)}))
+  (draw [this game]
+    (let [[x y] (p/position this)]
+      (p/draw-circle game {:x x :y y
+                           :radius (p/radius this)
+                           :rotation (p/rotation this)})))
+  (shape [this] this)
+  (shape [this val] val)
 
   p/ICircle
   (radius [this] (:radius this))
 
-  IBounds
+  p/IBounds
   (bounds [this]
     (let [[x y] (:position this)
           r (:radius this)]
@@ -183,8 +186,12 @@
   (active [this val] (assoc this :active val))
 
   p/IBody
-  (draw [this]
-    (p/draw-polygon {:points (p/points this)}))
+  (draw [this game]
+    (p/draw-polygon game {:position (p/position this)
+                          :points (p/rel-points this)
+                          :rotation (p/rotation this)}))
+  (shape [this] this)
+  (shape [this val] val)
 
   p/IPolygon
   (rel-points [this] (:rel-points this))
@@ -193,7 +200,7 @@
   (rotation-matrix [this] (:rotation-matrix this))
   (normals [this] (:normals this))
 
-  IBounds
+  p/IBounds
   (bounds [this]
     (let [[p1 & r-points] (create-points this)]
       (reduce (fn [[[min-x min-y] [max-x max-y]] [x y]]
@@ -245,14 +252,14 @@
 ;; ---------------------------------------------------------------------
 ;; Public Helper Functions
 
+
 (defn bounds-overlap? [a b]
-  (let [[[ax1 ay1] [ax2 ay2]] (bounds a)
-        [[bx1 by1] [bx2 by2]] (bounds b)]
+  (let [[[ax1 ay1] [ax2 ay2]] (p/bounds a)
+        [[bx1 by1] [bx2 by2]] (p/bounds b)]
     (not (or (> ax1 bx2)
              (< ax2 bx1)
              (> ay1 by2)
              (< ay2 by1)))))
-
 
 (defn create-circle [{:keys [id
                              position

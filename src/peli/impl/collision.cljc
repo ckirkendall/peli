@@ -1,11 +1,10 @@
-(ns peli.collision
+(ns peli.impl.collision
   (:require [peli.protocols :as p]
-            [clojure.core.matrix :as matrix]
-            [peli.phy-math :refer [sub add dot cross-vr cross-rv
-                                   cross-vv mul-vr dist-sqr mmul42
-                                   perp transpose div-vr normalize
-                                   sqrt floor ceil infinity
-                                   neg-infinity]]))
+            [peli.impl.phy-math :refer [sub add dot cross-vr cross-rv
+                                        cross-vv mul-vr dist-sqr mmul42
+                                        perp transpose div-vr normalize
+                                        sqrt floor ceil infinity
+                                        neg-infinity]]))
 
 ;; ---------------------------------------------------------------------
 ;; Broad Phase
@@ -20,7 +19,7 @@
 
 
 (defn- add-item-to-matrix [matrix block-size {:keys [id] :as item}]
-  (let [[col row max-col max-row] (matrix-bounds block-size (p/bounds item))]
+  (let [[col row max-col max-row] (matrix-bounds block-size (p/bounds (p/shape item)))]
     (reduce (fn [matrix row]
               (reduce (fn [matrix col]
                         (let [ky (+ (* row 1000) col)
@@ -45,8 +44,9 @@
                          (add-item-to-matrix matrix block-size item))
                        (transient {:pairs (transient #{})})
                        items)
-        pairs (persistent! (get matrix :pairs))]
-    [pairs (persistent! (dissoc! matrix :pairs))]))
+        pairs (persistent! (get matrix :pairs))
+        matrix (persistent! (dissoc! matrix :pairs))]
+    [pairs matrix]))
 
 ;; ---------------------------------------------------------------------
 ;; Narrow Phase

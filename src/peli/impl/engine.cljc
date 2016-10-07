@@ -1,8 +1,10 @@
 (ns peli.impl.engine
   (:require [peli.protocols :as p]
-            [peli.collision :as collision]
-            [peli.response :as response]
-            [peli.physics :as physics]))
+            [peli.impl.collision :as collision]
+            [peli.impl.response :as response]
+            [peli.impl.physics :as physics]
+            [peli.impl.frame :as frame]
+            [peli.impl.phy-math :as math]))
 
 ;; ---------------------------------------------------------------------
 ;; Default Implementations
@@ -16,11 +18,14 @@
     (physics/apply-physics this dt))
 
   p/ICollisionFilter
-  (collidable? [this pair] true)
+  (collidable? [this body] true)
 
   p/ICollision
   (collide [this collision game]
-    [game collision]))
+    [game collision])
+
+  p/IRenderDepth
+  (depth [this] 1))
 
 ;; ---------------------------------------------------------------------
 ;; Collision Management
@@ -35,7 +40,7 @@
                                        (p/id s1) (p/id b1)
                                        (p/id s2) (p/id b2))]
               (if-not (= 0 (p/inv-mass s1) (p/inv-mass s2))
-                (if-let [collision (coll/collision s1 s2)]
+                (if-let [collision (collision/collision s1 s2)]
                   [shape->parent (conj colls collision)]
                   [shape->parent colls])
                 [shape->parent colls])))
@@ -46,9 +51,9 @@
   (filter (fn [[aid bid]]
             (let [a (p/body game aid)
                   b (p/body game bid)]
-              (or (not (p/collidable? a b))
-                  (not (p/collidable? b a)))))
-          pairs))
+              (and (p/collidable? a b)
+                   (p/collidable? b a))))
+          (map vec pairs)))
 
 (defn dispatch-collision [game {:keys [a b] :as coll}]
   (let [b1 (p/body game a)
@@ -59,8 +64,8 @@
             [b1 b2])))
 
 (defn body-collision [body coll game]
-  {:post [(satifies? p/IGame (first %))
-          (instance? coll/Collision (second %))]}
+  {:post [(satisfies? p/IGame (first %))
+          (instance? peli.impl.collision.Collision (second %))]}
   (p/collide body coll game))
 
 
@@ -77,9 +82,13 @@
           [game []]
           colls))
 
-(defn handle-collision-response [game shape->parent colls]
-  (let [colls (res/collision-response (filter :active collisions) dt gravity)
-        [shape-map imp-map] (res/solve-positions colls (:imp-map db {}))
+(defn handle-collision-response [game shape->parent colls dt]
+  (let [gravity (p/gravity game)
+        colls (response/collision-response (filter :active? colls)
+                                           dt
+                                           gravity)
+        imp-map (p/position-impulses game)
+        [shape-map imp-map] (response/solve-positions colls (or imp-map {}))
         game (reduce (fn [game [id shape]]
                        (let [bid (shape->parent id)
                              body (-> (p/body game bid)
@@ -90,13 +99,14 @@
     (p/position-impulses game imp-map)))
 
 
-(defn apply-collisions [game]
+(defn apply-collisions [game dt]
   (let [bodies (p/bodies game)
-        [pairs matrix] (coll/generate-pairs block-size (vals bodies))
+        block-size (p/block-size game)
+        [pairs matrix] (collision/generate-pairs block-size (vals bodies))
         pairs (filter-collisions game pairs)
-        [shape->parent colls] (gen-collisions [game pairs])
+        [shape->parent colls] (gen-collisions game pairs)
         [game colls] (dispatch-collisions game shape->parent colls)]
-    (handle-collision-response game shape->parent colls)))
+    (handle-collision-response game shape->parent colls dt)))
 
 
 ;; ---------------------------------------------------------------------
@@ -104,12 +114,12 @@
 
 (defn apply-physics [game dt]
   (reduce (fn [game body]
-            (let [gravity-factor (p/gravity-factor body)
+            (let [gravity-factor (or (p/gravity-factor body) 1.0)
                   gravity (p/gravity game)]
               (p/body game (p/id body)
                 (cond-> body
                   gravity
-                  (phy/apply-gravity (* gravity gravity-factor) dt)
+                  (physics/apply-gravity (math/mul-vr gravity gravity-factor) dt)
                   :always
                   (p/apply-physics dt)))))
           game
@@ -122,5 +132,5 @@
 (defn step [game dt]
   (-> game
       (apply-physics dt)
-      apply-collisions
+      (apply-collisions dt)
       frame/adjust-frame))

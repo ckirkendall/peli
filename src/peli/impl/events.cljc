@@ -1,4 +1,5 @@
-(ns peli.events)
+(ns peli.events
+  (:require [peli.protocols :as p]))
 
 
 (defn now []
@@ -7,7 +8,7 @@
 
 
 (defn process-events [game]
-  {:pre [(satisfies? p/IGame)]}
+  {:pre [(satisfies? p/IGame game)]}
   (let [now (js/Date.now)
         events (-> (p/event-queue game)
                    (filter #(>= now (:timing %))))]
