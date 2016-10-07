@@ -31,7 +31,7 @@
   (gravity [this]
     (:gravity this [0.0 0.0])))
 
-(defrecord Game [id worlds block-size fps active-world pos-impulse-map graphics-adapter frame-rate]
+(defrecord Game [id worlds block-size active-world pos-impulse-map graphics-adapter fps]
   p/IIdentity
   (id [this] (:id this))
 
@@ -41,6 +41,7 @@
   (block-size [this] (:block-size this))
   (block-size [this val] (assoc this :block-size val))
   (fps [this] (:fps this))
+  (fps [this val] (assoc this :fps val))
   (active-world [this] (:active-world this))
   (activate-world [this id]
     (assoc this :active-world (p/world this id)))
@@ -86,4 +87,6 @@
   (draw-rounded-rect [this opts]
     (p/draw-rounded-rect (p/graphics-adapter this) opts))
   (draw-sprite [this opts]
-    (p/draw-sprite (p/graphics-adapter this) opts)))
+    (p/draw-sprite (p/graphics-adapter this) opts))
+  (draw-text [this opts]
+    (p/draw-text (p/graphics-adapter this) opts)))

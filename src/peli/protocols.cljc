@@ -28,7 +28,7 @@
   (gravity [this]))
 
 (defprotocol IGame
-  (fps [this])
+  (fps [this] [this val])
   (block-size [this] [this new])
   (active-world [this])
   (activate-world [this id])
@@ -107,4 +107,5 @@
   (draw-circle [this opts])
   (draw-rect [this opts])
   (draw-rounded-rect [this opts])
-  (draw-sprite [this opts]))
+  (draw-sprite [this opts])
+  (draw-text [this opts]))

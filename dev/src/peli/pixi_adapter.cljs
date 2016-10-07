@@ -101,6 +101,13 @@
     sprite))
 
 
+(defn draw-text [{:keys [text font fill position]}]
+  (let [[x y] position
+        msg (js/PIXI.Text. text #js{:font font :fill fill})]
+    (set! (.-x msg) x)
+    (set! (.-y msg) y)
+    msg))
+
 (defn ctx->ctx! [ctx1 ctx2]
   (set! (.-x ctx1) (.-x ctx2))
   (set! (.-y ctx1) (.-y ctx2))
@@ -124,28 +131,15 @@
              :stage stage)))
   p/IGraphicsAdapter
   (render [{:keys [stage renderer] :as this} game]
+    (.removeChildren stage)
     (let [frame (p/frame game)
-          bodies (sort-by #(p/depth %) (vals (p/bodies game)))
-          elements
-          (reduce (fn [elements body]
-                    (let [octx (get elements (p/id body))]
-                      (if (geometry/bounds-overlap? (p/shape body) frame)
-                        (let [nctx (p/draw body game)]
-                          (if octx
-                            (do
-                              (ctx->ctx! octx nctx)
-                              elements)
-                            (do
-                              (js/console.log "adding element" nctx)
-                              (.addChild stage nctx)
-                              (assoc elements (p/id body) nctx))))
-                        (do
-                          (.removeChild stage octx)
-                          (dissoc elements (p/id body))))))
-                  (:elements this)
-                  bodies)]
+          bodies (sort-by #(p/depth %) (vals (p/bodies game)))]
+      (doseq [body bodies]
+        (when (geometry/bounds-overlap? (p/shape body) frame)
+          (let [nctx (p/draw body game)]
+            (.addChild stage nctx))))
       (.render renderer stage)
-      (assoc this :elements elements)))
+      this))
   (draw-polygon [this opts]
     (draw-polygon opts))
   (draw-circle [this opts]
@@ -155,7 +149,9 @@
   (draw-rounded-rect [this opts]
     (draw-rounded-rect opts))
   (draw-sprite [this opts]
-    (draw-sprite opts (:texters this))))
+    (draw-sprite opts (:texters this)))
+  (draw-text [this opts]
+    (draw-text opts)))
 
 (defn create-adapter [dom-id width height]
   (p/init (map->PixiAdapter {:id dom-id}) {:width width :height height}))

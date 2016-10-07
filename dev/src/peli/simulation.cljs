@@ -14,6 +14,40 @@
 (def height 600.0)
 (def block-size 40)
 
+(defn holder-shape [id]
+  (geo/create-box {:id id
+                   :position [0.0 0.0]
+                   :width 1
+                   :height 1
+                   :density infinity}))
+
+(defrecord DynamicLabel [id text-fn position font fill rotation shape]
+  p/IIdentity
+  (id [this] (:id this))
+
+  p/IBody
+  (draw [this game]
+    (p/draw-text game (assoc this :text (text-fn game))))
+  (shape [this] (:shape this))
+  (shape [this val] (assoc this :shape val))
+
+
+  p/ICollisionFilter
+  (collidable? [this _] false)
+
+  p/IRenderDepth
+  (depth [this] 1000))
+
+
+(defn create-fps [id]
+  (map->DynamicLabel {:id id
+                      :text-fn (fn [game] (str "FPS: " (p/fps game)))
+                      :position [20 20]
+                      :font "12px sans-serif"
+                      :fill "white"
+                      :rotation 0.0
+                      :shape (holder-shape id)}))
+
 (def adapter (adapter/create-adapter "myGameDiv" width height))
 
 (def frame (frame/Frame. 0 0 width height))
@@ -47,7 +81,8 @@
                              :bodies {:circle1 circle1
                                       :box1 box1
                                       :box2 box2
-                                      :bound4 base}
+                                      :bound4 base
+                                      :fps-label (create-fps :fps-label)}
                              :sprites {}
                              :sounds {}
                              :frame frame
@@ -60,13 +95,13 @@
          {:id :my-game
           :worlds {(p/id world) world}
           :block-size 50
-          :fps 70
+          :fps 60
           :active-world world
           :pos-impulse-map {}
           :graphics-adapter adapter})))
 
-(def fr-holder (atom (vec (for [iter (range 100)] (p/fps @game)))))
-(def target-fps (/ 1000 (p/fps @game)))
+(def fr-holder (atom (vec (for [iter (range 50)] 60))))
+
 
 (defn average [vals]
   (/ (apply + vals) (count vals)))
@@ -85,12 +120,12 @@
      (let [target-fps (int (/ 1000 (p/fps @game)))
            start (js/Date.now)
            diff (- start time)
-           frame-rate  (int (/ 1000 (+ diff 0.00001)))]
-       (js/window.setTimeout #(animation-loop start (mod (inc step-cnt) 100)) target-fps)
+           frame-rate  (Math/round (/ 1000 (+ diff 0.00001)))]
+       (js/window.requestAnimationFrame #(animation-loop start (mod (inc step-cnt) (count @fr-holder))))
        (swap! fr-holder assoc step-cnt frame-rate)
        (swap! game
               (fn [db]
                 (-> db
-                    (assoc :frame-rate (int (average @fr-holder)))
+                    (p/fps (int (average @fr-holder)))
                     (engine/step (min 0.020 (/ diff 1000)))
                     render)))))))

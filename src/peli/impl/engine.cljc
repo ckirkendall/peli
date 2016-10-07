@@ -25,7 +25,11 @@
     [game collision])
 
   p/IRenderDepth
-  (depth [this] 1))
+  (depth [this] 1)
+
+  p/IActive
+  (active [this] true)
+  (active [this val] this))
 
 ;; ---------------------------------------------------------------------
 ;; Collision Management
@@ -115,13 +119,14 @@
 (defn apply-physics [game dt]
   (reduce (fn [game body]
             (let [gravity-factor (or (p/gravity-factor body) 1.0)
-                  gravity (p/gravity game)]
+                  gravity (p/gravity game)
+                  shape (p/shape body)]
               (p/body game (p/id body)
-                (cond-> body
-                  gravity
-                  (physics/apply-gravity (math/mul-vr gravity gravity-factor) dt)
-                  :always
-                  (p/apply-physics dt)))))
+                (p/shape body (cond-> shape
+                                gravity
+                                (physics/apply-gravity (math/mul-vr gravity gravity-factor) dt)
+                                :always
+                                (p/apply-physics dt))))))
           game
           (vals (p/bodies game))))
 
