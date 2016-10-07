@@ -8,7 +8,7 @@
    [peli.impl.physics :as phy]
    [peli.impl.collision :as coll]
    [peli.impl.frame :as frame]
-   [peli.impl.phy-math :refer [mul-vr normalize sub infinity]]
+   [peli.impl.phy-math :refer [dot mul-vr normalize sub infinity]]
    [peli.impl.text :as text]))
 
 (def width 600.0)
@@ -62,10 +62,18 @@
             shape (p/shape this)
             velocity 100
             pos (p/position shape)
-            normal (normalize (sub mouse pos))
-            velocity (mul-vr normal velocity)]
+            [nx ny :as normal] (normalize (sub mouse pos))
+            velocity (mul-vr normal velocity)
+            dir (cond
+                  (and (pos? nx) (pos? (* nx ny))) 1.0
+                  (and (pos? nx) (neg? (* nx ny))) -1.0
+                  (and (neg? nx) (pos? (* nx ny))) -1.0
+                  (and (neg? nx) (neg? (* nx ny))) 1.0)
+            angle (* dir (Math/acos (dot normal [1 0])))]
         (p/shape this
-                 (p/linear-velocity shape velocity)))
+                 (-> shape
+                     (p/linear-velocity velocity)
+                     (p/rotation angle))))
       this)))
 
 (def frame (frame/Frame. 0 0 width height))
