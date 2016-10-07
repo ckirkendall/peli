@@ -103,6 +103,7 @@
 
 (defprotocol IGraphicsAdapter
   (render [this game])
+  (request-animation-frame [this callback])
   (draw-polygon [this opts])
   (draw-circle [this opts])
   (draw-rect [this opts])

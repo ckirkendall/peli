@@ -10,7 +10,7 @@
   (new js/PIXI.Container))
 
 (defn create-renderer [width height]
-  (new js/PIXI.CanvasRenderer width height nil true))
+  (js/PIXI.autoDetectRenderer width height nil true))
 
 (defn create-asset-loader [image-urls]
   (new js/PIXI.loaders.AssetLoader (apply array image-urls)))
@@ -140,6 +140,8 @@
             (.addChild stage nctx))))
       (.render renderer stage)
       this))
+  (request-animation-frame [this callback]
+    (js/window.requestAnimationFrame callback))
   (draw-polygon [this opts]
     (draw-polygon opts))
   (draw-circle [this opts]

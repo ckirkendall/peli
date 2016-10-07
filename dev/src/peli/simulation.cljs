@@ -8,45 +8,21 @@
    [peli.impl.physics :as phy]
    [peli.impl.collision :as coll]
    [peli.impl.frame :as frame]
-   [peli.impl.phy-math :refer [sub infinity]]))
+   [peli.impl.phy-math :refer [sub infinity]]
+   [peli.impl.text :as text]))
 
 (def width 600.0)
 (def height 600.0)
 (def block-size 40)
 
-(defn holder-shape [id]
-  (geo/create-box {:id id
-                   :position [0.0 0.0]
-                   :width 1
-                   :height 1
-                   :density infinity}))
 
-(defrecord DynamicLabel [id text-fn position font fill rotation shape]
-  p/IIdentity
-  (id [this] (:id this))
-
-  p/IBody
-  (draw [this game]
-    (p/draw-text game (assoc this :text (text-fn game))))
-  (shape [this] (:shape this))
-  (shape [this val] (assoc this :shape val))
-
-
-  p/ICollisionFilter
-  (collidable? [this _] false)
-
-  p/IRenderDepth
-  (depth [this] 1000))
 
 
 (defn create-fps [id]
-  (map->DynamicLabel {:id id
-                      :text-fn (fn [game] (str "FPS: " (p/fps game)))
-                      :position [20 20]
-                      :font "12px sans-serif"
-                      :fill "white"
-                      :rotation 0.0
-                      :shape (holder-shape id)}))
+  (text/create-dynamic-label
+   {:id id
+    :text-fn (fn [game] (str "FPS: " (p/fps game)))
+    :position [20 20]}))
 
 (def adapter (adapter/create-adapter "myGameDiv" width height))
 
@@ -120,8 +96,11 @@
      (let [target-fps (int (/ 1000 (p/fps @game)))
            start (js/Date.now)
            diff (- start time)
-           frame-rate  (Math/round (/ 1000 (+ diff 0.00001)))]
-       (js/window.requestAnimationFrame #(animation-loop start (mod (inc step-cnt) (count @fr-holder))))
+           frame-rate  (Math/ceil (/ 1000 (+ diff 0.00001)))
+           adapter (p/graphics-adapter @game)]
+       (p/request-animation-frame
+        adapter
+        #(animation-loop start (mod (inc step-cnt) (count @fr-holder))))
        (swap! fr-holder assoc step-cnt frame-rate)
        (swap! game
               (fn [db]
