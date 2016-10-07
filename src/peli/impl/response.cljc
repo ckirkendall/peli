@@ -2,6 +2,7 @@
   (:require [peli.protocols :as p]
             [peli.impl.physics :as phy]
             [peli.impl.collision :as coll]
+            [peli.impl.utils :refer [is-static?]]
             [peli.impl.phy-math :refer [sub add dot cross-vr cross-rv
                                         cross-vv mul-vr dist-sqr =*
                                         transpose normalize clamp
@@ -15,10 +16,6 @@
 (def pos-iterations 4)
 (def pos-warming 0.8)
 (def pos-scale 0.2)
-
-(defn is-static? [body]
-  (and (= (p/inv-mass body) 0.0)
-       (= (p/inv-moment-i body) 0.0)))
 
 
 (defn has-static? [{:keys [a b]}]

@@ -4,7 +4,8 @@
             [peli.impl.response :as response]
             [peli.impl.physics :as physics]
             [peli.impl.frame :as frame]
-            [peli.impl.phy-math :as math]))
+            [peli.impl.phy-math :as math]
+            [peli.impl.utils :as utils]))
 
 ;; ---------------------------------------------------------------------
 ;; Default Implementations
@@ -28,8 +29,12 @@
   (depth [this] 1)
 
   p/IActive
-  (active [this] true)
-  (active [this val] this))
+  (active
+    ([this] true)
+    ([this val] this))
+
+  p/IStep
+  (step [this] this))
 
 ;; ---------------------------------------------------------------------
 ;; Collision Management
@@ -56,7 +61,9 @@
             (let [a (p/body game aid)
                   b (p/body game bid)]
               (and (p/collidable? a b)
-                   (p/collidable? b a))))
+                   (p/collidable? b a)
+                   (or (not (utils/is-static? (p/shape a)))
+                       (not (utils/is-static? (p/shape b)))))))
           (map vec pairs)))
 
 (defn dispatch-collision [game {:keys [a b] :as coll}]
@@ -108,6 +115,7 @@
         block-size (p/block-size game)
         [pairs matrix] (collision/generate-pairs block-size (vals bodies))
         pairs (filter-collisions game pairs)
+        game (p/collision-matrix game matrix)
         [shape->parent colls] (gen-collisions game pairs)
         [game colls] (dispatch-collisions game shape->parent colls)]
     (handle-collision-response game shape->parent colls dt)))
@@ -134,8 +142,18 @@
 ;; ---------------------------------------------------------------------
 ;; Step
 
+(defn step-bodies [game]
+  (reduce (fn [game bid]
+            (p/body game bid
+              (p/step (p/body game bid)
+                      game)))
+          game
+          (keys (p/bodies game))))
+
+
 (defn step [game dt]
   (-> game
       (apply-physics dt)
       (apply-collisions dt)
+      step-bodies
       frame/adjust-frame))

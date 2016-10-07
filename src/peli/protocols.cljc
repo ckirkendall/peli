@@ -12,6 +12,7 @@
 (defprotocol IActive
   (active [this] [this val]))
 
+
 ;; ---------------------------------------------------------------------
 ;; Game
 
@@ -25,7 +26,8 @@
   (frame [this] [this new])
   (camera-focus [this] [this id])
   (body [this id] [this id val])
-  (gravity [this]))
+  (gravity [this])
+  (world-state [this] [this val]))
 
 (defprotocol IGame
   (fps [this] [this val])
@@ -35,7 +37,8 @@
   (worlds [this])
   (world [this id])
   (position-impulses [this] [this val])
-  (graphics-adapter [this] [this val]))
+  (graphics-adapter [this] [this val])
+  (collision-matrix [this] [this val]))
 
 
 ;; ---------------------------------------------------------------------
@@ -59,6 +62,10 @@
 
 (defprotocol IGravityFactor
   (gravity-factor [this]))
+
+(defprotocol IStep
+  (step [this game]))
+
 
 ;; ---------------------------------------------------------------------
 ;; Geometry
@@ -110,3 +117,21 @@
   (draw-rounded-rect [this opts])
   (draw-sprite [this opts])
   (draw-text [this opts]))
+
+;;adapter should discard events it doesn't understand
+;; :keyup
+;; :keydown
+;; :keypress
+;; :mousemove
+;; :click
+;; :dblclick
+;; :mousedown
+;; :mouseup
+;; :mouseenter
+;; :mouseleave
+;; :touchstart
+;; :touchend
+;; :touchmove
+
+(defprotocol IInputAdapter
+  (set-event-handler [this event func]))

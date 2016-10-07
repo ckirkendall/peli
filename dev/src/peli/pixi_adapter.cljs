@@ -117,7 +117,7 @@
   ctx1)
 
 
-(defrecord PixiAdapter [renderer stage dom-id textures elements]
+(defrecord PixiGraphicsAdapter [renderer stage dom-id textures elements]
   p/IInit
   (init [this {:keys [width height]}]
     (let [renderer (create-renderer width height)
@@ -155,5 +155,22 @@
   (draw-text [this opts]
     (draw-text opts)))
 
-(defn create-adapter [dom-id width height]
-  (p/init (map->PixiAdapter {:id dom-id}) {:width width :height height}))
+(defn create-graphics-adapter [dom-id width height]
+  (p/init (map->PixiGraphicsAdapter {:id dom-id}) {:width width :height height}))
+
+
+
+(defrecord PixiInputAdapter [stage]
+  p/IInit
+  (init [this stage]
+    (set! (.-interactive stage) true)
+    #_(set! (.-interactiveChildren stage) false)
+    (assoc this :stage stage))
+
+  p/IInputAdapter
+  (set-event-handler [this event func]
+    (.on (:stage this) (name event) func)))
+
+
+(defn create-input-adapter [stage]
+  (p/init (PixiInputAdapter. stage) stage))

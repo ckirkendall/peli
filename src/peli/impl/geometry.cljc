@@ -2,7 +2,8 @@
   (:require [peli.protocols :as p]
             [peli.impl.utils :as utils]
             [peli.impl.phy-math :refer [add sub cross-vv mul-vr
-                                        mmul42 normalize infinity]]))
+                                        mmul42 normalize infinity
+                                        dist-sqr]]))
 
 ;; ---------------------------------------------------------------------
 ;; Helper Functions
@@ -260,6 +261,27 @@
              (< ax2 bx1)
              (> ay1 by2)
              (< ay2 by1)))))
+
+(defn contains-point [shape [x y :as  point]]
+  (cond
+    (satisfies? p/ICircle shape)
+    (<= (dist-sqr (p/position shape) point)
+        (* (p/radius shape) (p/radius shape)))
+
+    (satisfies? p/IPolygon shape)
+    (let [points (p/points shape)]
+      (reduce (fn [inside edge-idx]
+                (let [[xi yi] (get points edge-idx)
+                      [xj yj] (get points (mod (inc edge-idx) (count points)))
+                      intersect (and (not= (> yi y) (> yj y))
+                                     (< x  (+ (/ (* (- xj xi) (- y yi))
+                                                 (- yj yi))
+                                              xi)))]
+                  (if intersect
+                    (not inside)
+                    inside)))
+              false
+              (range (count points))))))
 
 (defn create-circle [{:keys [id
                              position

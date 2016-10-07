@@ -8,7 +8,8 @@
 
 ;; ---------------------------------------------------------------------
 ;; Broad Phase
-
+(defn cell-key [row col]
+  (+ (* row 1000) col))
 
 (defn- matrix-bounds [block-size [[x1 y1] [x2 y2]]]
   (let [col (max (floor (/ x1 block-size)) 0)
@@ -22,7 +23,7 @@
   (let [[col row max-col max-row] (matrix-bounds block-size (p/bounds (p/shape item)))]
     (reduce (fn [matrix row]
               (reduce (fn [matrix col]
-                        (let [ky (+ (* row 1000) col)
+                        (let [ky (cell-key row col)
                               val (get matrix ky)
                               pairs (get matrix :pairs)]
                           (-> (assoc! matrix ky (if val (conj val id) [id]))

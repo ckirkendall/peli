@@ -1,7 +1,7 @@
 (ns peli.impl.game
   (:require [peli.protocols :as p]))
 
-(defrecord World [id bodies sprites sounds gravity]
+(defrecord World [id bodies sprites sounds gravity world-state]
   p/IIdentity
   (id [this] (:id this))
 
@@ -29,9 +29,11 @@
   (body [this id val]
     (assoc-in this [:bodies id] val))
   (gravity [this]
-    (:gravity this [0.0 0.0])))
+    (:gravity this [0.0 0.0]))
+  (world-state [this] (:world-state this))
+  (world-state [this val] (assoc this :world-state val)))
 
-(defrecord Game [id worlds block-size active-world pos-impulse-map graphics-adapter fps]
+(defrecord Game [id worlds block-size active-world pos-impulse-map graphics-adapter fps collision-matrix]
   p/IIdentity
   (id [this] (:id this))
 
@@ -49,6 +51,8 @@
   (position-impulses [this val] (assoc this :pos-impulse-map val))
   (graphics-adapter [this] (:graphics-adapter this))
   (graphics-adapter [this val] (assoc this :graphics-adapter val))
+  (collision-matrix [this] (:collision-matrix this))
+  (collision-matrix [this val] (assoc this :collision-matrix val))
 
   p/IWorld
   (bodies [this]
@@ -72,6 +76,9 @@
     (update this :active-world p/body id val))
   (gravity [this]
     (p/gravity (p/active-world this)))
+  (world-state [this] (p/world-state (p/active-world this)))
+  (world-state [this val]
+    (update this :active-world p/world-state val))
 
   p/IGraphicsAdapter
   (render [this game]
