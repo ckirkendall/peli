@@ -38,6 +38,7 @@
   (world [this id])
   (position-impulses [this] [this val])
   (graphics-adapter [this] [this val])
+  (input-adapter [this] [this val])
   (collision-matrix [this] [this val]))
 
 
@@ -65,6 +66,9 @@
 
 (defprotocol IStep
   (step [this game]))
+
+(defprotocol IInteractive
+  (event-handlers [this]))
 
 
 ;; ---------------------------------------------------------------------
@@ -133,5 +137,13 @@
 ;; :touchend
 ;; :touchmove
 
+;; Input Events should look like the following
+;; {:type :mousemove
+;;  :data {:position [x y]}
+;;  :event <native event>}
+
+;; NOTE: all events at this level are container level events
+
 (defprotocol IInputAdapter
-  (set-event-handler [this event func]))
+  (set-event-handler [this event func])
+  (supported-event? [this event-key]))

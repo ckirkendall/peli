@@ -5,7 +5,8 @@
             [peli.impl.physics :as physics]
             [peli.impl.frame :as frame]
             [peli.impl.phy-math :as math]
-            [peli.impl.utils :as utils]))
+            [peli.impl.utils :as utils]
+            [peli.impl.events :as events]))
 
 ;; ---------------------------------------------------------------------
 ;; Default Implementations
@@ -34,7 +35,10 @@
     ([this val] this))
 
   p/IStep
-  (step [this] this))
+  (step [this game] this)
+
+  p/IInteractive
+  (event-handlers [this] nil))
 
 ;; ---------------------------------------------------------------------
 ;; Collision Management
@@ -153,6 +157,7 @@
 
 (defn step [game dt]
   (-> game
+      events/process-events
       (apply-physics dt)
       (apply-collisions dt)
       step-bodies

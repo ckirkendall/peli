@@ -1,9 +1,14 @@
 (ns peli.impl.game
-  (:require [peli.protocols :as p]))
+  (:require [peli.protocols :as p]
+            [peli.impl.events :as events]))
 
-(defrecord World [id bodies sprites sounds gravity world-state]
+(defrecord World [id bodies sprites sounds gravity world-state event-handlers]
   p/IIdentity
   (id [this] (:id this))
+
+  p/IInteractive
+  (event-handlers [this]
+    (:event-handlers this))
 
   p/IWorld
   (bodies [this]
@@ -33,7 +38,14 @@
   (world-state [this] (:world-state this))
   (world-state [this val] (assoc this :world-state val)))
 
-(defrecord Game [id worlds block-size active-world pos-impulse-map graphics-adapter fps collision-matrix]
+(defrecord Game [id worlds block-size active-world pos-impulse-map
+                 graphics-adapter input-adapter fps collision-matrix]
+  p/IInit
+  (init [this _]
+    (when (:active-world this)
+      (events/initialize-handlers! (:active-world this)))
+    this)
+
   p/IIdentity
   (id [this] (:id this))
 
@@ -46,11 +58,14 @@
   (fps [this val] (assoc this :fps val))
   (active-world [this] (:active-world this))
   (activate-world [this id]
+    (events/initialize-handlers! (p/world this id))
     (assoc this :active-world (p/world this id)))
   (position-impulses [this] (:pos-impulse-map this))
   (position-impulses [this val] (assoc this :pos-impulse-map val))
   (graphics-adapter [this] (:graphics-adapter this))
   (graphics-adapter [this val] (assoc this :graphics-adapter val))
+  (input-adapter [this] (:input-adapter this))
+  (input-adapter [this val] (assoc this :input-adapater val))
   (collision-matrix [this] (:collision-matrix this))
   (collision-matrix [this val] (assoc this :collision-matrix val))
 
@@ -58,8 +73,10 @@
   (bodies [this]
     (p/bodies (p/active-world this)))
   (add-body [this body]
+    (events/add-input-handlers! (p/id body) (p/event-handlers body))
     (update this :active-world p/add-body body))
   (remove-body [this id]
+    (events/remove-input-handlers! id)
     (update this :active-world p/remove-body id))
   (sprites [this] (p/sprites (p/active-world this)))
   (sounds [this] (p/sounds (p/active-world this)))
@@ -73,12 +90,20 @@
   (body [this id]
     (p/body (p/active-world this) id))
   (body [this id val]
+    (let [cur (p/body this id)]
+      (when-not (identical? (p/event-handlers val)
+                            (p/event-handlers cur))
+        (events/add-input-handlers! (p/id val) (p/event-handlers val))))
     (update this :active-world p/body id val))
   (gravity [this]
     (p/gravity (p/active-world this)))
   (world-state [this] (p/world-state (p/active-world this)))
   (world-state [this val]
     (update this :active-world p/world-state val))
+
+  p/IInteractive
+  (event-handlers [this]
+    (p/event-handlers (p/active-world this)))
 
   p/IGraphicsAdapter
   (render [this game]
@@ -97,3 +122,22 @@
     (p/draw-sprite (p/graphics-adapter this) opts))
   (draw-text [this opts]
     (p/draw-text (p/graphics-adapter this) opts)))
+
+
+
+
+(defn- set-global-input-handler [game dispatcher]
+  (p/input-adapter game
+                   (reduce (fn [adapter event]
+                             (if (p/supported-event? adapter event)
+                               (p/set-event-handler adapter event dispatcher)
+                               adapter))
+                           (p/input-adapter game)
+                           events/possible-input-events)))
+
+(defn init-game [game-atm]
+  (let [input-dispatcher (events/event-dispatcher game-atm)]
+    (swap! game-atm (fn [game]
+                      (-> game
+                          (p/init nil)
+                          (set-global-input-handler input-dispatcher))))))

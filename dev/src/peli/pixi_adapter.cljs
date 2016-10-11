@@ -17,7 +17,7 @@
 
 (defn line-style [ctx {:keys [stroke stroke-width stroke-opacity]
                        :or {stroke 0xcfcfcf
-                            stroke-width 1.0
+                            stroke-width 2.0
                             stroke-opacity 1.0}}]
   (.lineStyle ctx stroke-width stroke stroke-opacity))
 
@@ -159,6 +159,39 @@
   (p/init (map->PixiGraphicsAdapter {:id dom-id}) {:width width :height height}))
 
 
+;TODO - touch and multi-touch
+(def single-position-events
+  #{:mouseenter :mouseleave :mousemove :click :dbclick})
+
+(def key-events
+  #{:keyup :keydown :keypress})
+
+(defn transform-event [event]
+  (let [type (keyword (.-type event))]
+    (cond
+      (single-position-events type)
+      (let [point (-> event .-data .-global)
+            pos [(.-x point) (.-y point)]]
+        {:type type
+         :data {:position pos
+                :ctrl-key (.-ctrlKey event)
+                :shift-key (.-shiftKey event)
+                :alt-key (.-altKey event)
+                :meta-key (.-metaKey event)}
+         :event event})
+      (key-events type)
+      (let [key-code (.-keyCode event)]
+        {:type type
+         :data {:key-code key-code
+                :ctrl-key (.-ctrlKey event)
+                :shift-key (.-shiftKey event)
+                :alt-key (.-altKey event)
+                :meta-key (.-metaKey event)}
+         :event event})
+
+      :else
+      {:type type
+       :event event})))
 
 (defrecord PixiInputAdapter [stage]
   p/IInit
@@ -169,7 +202,10 @@
 
   p/IInputAdapter
   (set-event-handler [this event func]
-    (.on (:stage this) (name event) func)))
+    (.on (:stage this) (name event) #(-> % transform-event func))
+    this)
+  (supported-event? [this event-type] true))
+
 
 
 (defn create-input-adapter [stage]

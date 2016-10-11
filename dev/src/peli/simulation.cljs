@@ -28,7 +28,7 @@
 (def input-adapter (adapter/create-input-adapter (:stage gfx-adapter)))
 
 
-(defrecord FloatingBox [id shape]
+(defrecord FloatingBox [id shape event-handlers]
   p/IIdentity
   (id [this] (:id this))
 
@@ -39,16 +39,27 @@
   (shape [this val] (assoc this :shape val))
 
   p/IGravityFactor
-  (gravity-factor [this] -0.5))
+  (gravity-factor [this] -0.5)
+
+  p/IInteractive
+  (event-handlers [this] event-handlers))
 
 
-(defrecord Follower [id shape]
+(def follower-collors [0xffffff 0xff0000 0x00ff00 0x0000ff])
+
+(defrecord Follower [id shape color event-handlers]
   p/IIdentity
   (id [this] (:id this))
 
   p/IBody
   (draw [this game]
-    (p/draw (:shape this) game))
+    (let [shape (:shape this)
+          [x y] (p/position shape)]
+      (p/draw-circle game {:x x :y y
+                           :fill (:color this)
+                           :stroke-width 3
+                           :radius (p/radius shape)
+                           :rotation (p/rotation shape)})))
   (shape [this] (:shape this))
   (shape [this val] (assoc this :shape val))
 
@@ -74,7 +85,11 @@
                  (-> shape
                      (p/linear-velocity velocity)
                      (p/rotation angle))))
-      this)))
+      this))
+
+  p/IInteractive
+  (event-handlers [this] event-handlers))
+
 
 (def frame (frame/Frame. 0 0 width height))
 
@@ -98,13 +113,26 @@
                                              :width 50.0
                                              :height 50.0
                                              :density 1})
-                            (phy/apply-force [400.0 0.0] [[450.0 200.0]] 1000.0))))
+                            (phy/apply-force [400.0 0.0] [[450.0 200.0]] 1000.0))
+                        {:click (fn [e game]
+                                  (let [body (p/body game :box2)
+                                        shape (p/shape body)
+                                        [vx vy] (p/linear-velocity shape)]
+                                    (p/body game :box2
+                                      (p/shape body
+                                        (p/linear-velocity shape [vx 100])))))}))
 
 (def follower (Follower. :follower
                          (geo/create-circle {:id :follower
                                              :position [250.0 100.0]
                                              :radius 20
-                                             :density 1})))
+                                             :density 1})
+                         0xffffff
+                         {:click (fn [e game]
+                                   (let [this (p/body game :follower)]
+                                     (p/body game :follower
+                                       (assoc this :color
+                                              (rand-nth follower-collors)))))}))
 
 
 (def left (geo/create-box {:id :bound-left
@@ -131,6 +159,11 @@
                            :height 10
                            :density infinity}))
 
+(defn mousemove-global [e game]
+  (let [[x y] (get-in e [:data :position])
+        cur-state (p/world-state game)]
+    (p/world-state game (assoc cur-state :mouse [x y]))))
+
 (def world (game/map->World {:id :world1
                              :bodies {:follower follower
                                       :circle1 circle1
@@ -144,7 +177,8 @@
                              :sprites {}
                              :sounds {}
                              :frame frame
-                             :gravity phy/default-gravity}))
+                             :gravity phy/default-gravity
+                             :event-handlers {:mousemove mousemove-global}}))
 
 
 
@@ -156,41 +190,10 @@
           :fps 60
           :active-world world
           :pos-impulse-map {}
-          :graphics-adapter gfx-adapter})))
+          :graphics-adapter gfx-adapter
+          :input-adapter input-adapter})))
 
-
-
-(defn click-obj [game-atm]
-  (fn [e]
-    (let [game @game-atm
-          point (-> e .-data .-global)
-          x (.-x point)
-          y (.-y point)
-          matrix (p/collision-matrix game)
-          block-size (p/block-size game)
-          col (int (/ x block-size))
-          row (int (/ y block-size))
-          canidates (get matrix (coll/cell-key row col))
-          bodies (->> canidates
-                      (map #(p/body game %))
-                      (sort-by p/depth))]
-      (doseq [body bodies]
-        (let [shape (p/shape body)]
-          (when (geo/contains-point shape [x y])
-            (let [[lx ly] (p/linear-velocity shape)
-                  new-shape (p/linear-velocity shape [lx (- ly 200)])]
-              (println (p/id body) new-shape)
-              (swap! game-atm p/body (p/id body) (p/shape body new-shape)))))))))
-
-
-(p/set-event-handler input-adapter :click (click-obj game))
-
-(p/set-event-handler input-adapter :mousemove (fn [e]
-                                                (let [point (-> e .-data .-global)
-                                                      [x y] [(.-x point) (.-y point)]]
-                                                  (swap! game (fn [game]
-                                                                (let [cur-state (p/world-state game)]
-                                                                  (p/world-state game (assoc cur-state :mouse [x y]))))))))
+(game/init-game game)
 
 (def fr-holder (atom (vec (for [iter (range 50)] 60))))
 
