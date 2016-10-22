@@ -5,7 +5,6 @@
             [peli.impl.geometry :as geometry]))
 
 
-
 (defn create-stage []
   (new js/PIXI.Container))
 
@@ -31,8 +30,7 @@
   (.endFill ctx))
 
 
-(defn draw-polygon [{:keys [position points rotation]
-                     :or {rotation 0.0} :as opts}]
+(defn draw-polygon [{:keys [position points rotation] :as opts}]
   (let [[x y] position
         ctx (-> (js/PIXI.Graphics.)
                 (line-style opts)
@@ -41,13 +39,15 @@
                 end-fill)]
     (set! (.-x ctx) x)
     (set! (.-y ctx) y)
-    (set! (.-rotation ctx) rotation)
+    (when rotation
+      (set! (.-rotation ctx) rotation))
     ctx))
 
 
-(defn draw-circle [{:keys [x y radius rotation]
+(defn draw-circle [{:keys [position radius rotation]
                     :or {rotaiton 0.0} :as opts}]
-  (let [ctx (-> (js/PIXI.Graphics.)
+  (let [[x y] position
+        ctx (-> (js/PIXI.Graphics.)
                 (line-style opts)
                 (begin-fill opts)
                 (.drawCircle 0 0 radius)
@@ -59,51 +59,29 @@
     (set! (.-rotation ctx) rotation)
     ctx))
 
-
-(defn draw-rect [{:keys [position width height rotation]
-                  :or {rotation 0.0} :as opts}]
-  (let [[x y] position
-        ctx (-> (js/PIXI.Graphics.)
-                (line-style opts)
-                (begin-fill opts)
-                (.drawRect 0 0 width height)
-                end-fill)]
-    (set! (.-x ctx) (- x (* width 0.5)))
-    (set! (.-y ctx) (- y (* height 0.5)))
-    (set! (.-rotation ctx) rotation)
-    ctx))
-
-(defn draw-rounded-rect [{:keys [position width height radius rotation]
-                          :or {rotation 0.0} :as opts}]
-  (let [[x y] position
-        ctx (-> (js/PIXI.Graphics.)
-                (line-style opts)
-                (begin-fill opts)
-                (.drawRoundedRect 0 0 width height radius)
-                end-fill)]
-    (set! (.-x ctx) (- x (* width 0.5)))
-    (set! (.-y ctx) (- y (* height 0.5)))
-    (set! (.-rotation ctx) rotation)
-    ctx))
-
-
 (defn draw-sprite [{:keys [position width height sprite-id
-                           rotation]} textures]
-  (let [sprite (js/PIXI.Sprite. (get textures sprite-id))
-        [x y] position]
-    (set! (.-x sprite) (- x (* width 0.5)))
-    (set! (.-y sprite) (- y (* height 0.5)))
+                           rotation pivot] :as opts} sprites]
+  (let [texture (.-texture (aget js/PIXI.loader.resources (get sprites sprite-id)))
+        sprite (js/PIXI.Sprite. texture)
+        [x y] position
+        [pvx pvy] (or pivot position)
+        p-point (js/PIXI.Point. 0.5 0.5)
+        anchor (.-anchor sprite)]
+    (set! (.-x sprite) (+ x (/ width 2)))
+    (set! (.-y sprite) (+ y (/ width 2)))
     (set! (.-width sprite) width)
     (set! (.-height sprite) height)
     (when rotation
-      (.set (.anchor sprite) x y)
-      (set! (.-rotation rotation)))
+      (set! (.-x anchor) 0.5)
+      (set! (.-y anchor) 0.5)
+      (set! (.-rotation sprite) rotation))
     sprite))
 
 
-(defn draw-text [{:keys [text font fill position]}]
+(defn draw-text [{:keys [text font font-size fill position]}]
   (let [[x y] position
-        msg (js/PIXI.Text. text #js{:font font :fill fill})]
+        font-str (str font-size "px " (name font))
+        msg (js/PIXI.Text. text #js{:font font-str :fill fill})]
     (set! (.-x msg) x)
     (set! (.-y msg) y)
     msg))
@@ -117,16 +95,52 @@
   ctx1)
 
 
-(defrecord PixiGraphicsAdapter [renderer stage dom-id textures elements]
+(defn draw-container [{:keys [position rotation pivot]
+                       :or {pivot position}} children]
+  (let [group (new js/PIXI.Container)]
+    (when rotation
+      (let [[px py] pivot
+            p-point (js/PIXI.Point. px py)]
+        (set! (.-pivot group) p-point)
+        (set! (.-rotation group) rotation)))
+    (doseq [child children]
+      (.addChild child))
+    group))
+
+
+(def tag->draw
+  {:poly draw-polygon
+   :circle draw-circle
+   :sprite draw-sprite
+   :text draw-text})
+
+
+(defn draw-hiccup [adapter [tag & opts]]
+  (cond
+    (= tag :g)
+    (let [[opts & children] opts]
+      (draw-container opts (map draw-hiccup children)))
+    (= tag :sprite)
+    (draw-sprite (first opts) (:sprites adapter))
+    :else
+    (let [draw-fn (tag->draw tag)]
+      (draw-fn (first opts)))))
+
+
+(defrecord PixiGraphicsAdapter [renderer stage dom-id sprites loader elements]
   p/IInit
-  (init [this {:keys [width height]}]
+  (init [this {:keys [width height sprites]}]
     (let [renderer (create-renderer width height)
           stage (create-stage)
           dom-el (if dom-id
                    (js/document.getElementId dom-id)
                    js/document.body)]
+      (doseq [[id url] sprites]
+        (.add js/PIXI.loader url))
+      (.load js/PIXI.loader #(println "sprites loaded"))
       (.appendChild dom-el (.-view renderer))
       (assoc this
+             :sprites sprites
              :renderer renderer
              :stage stage)))
   p/IGraphicsAdapter
@@ -136,27 +150,16 @@
           bodies (sort-by #(p/depth %) (vals (p/bodies game)))]
       (doseq [body bodies]
         (when (geometry/bounds-overlap? (p/shape body) frame)
-          (let [nctx (p/draw body game)]
+          (let [nctx (->> (p/draw body game)
+                          (draw-hiccup this))]
             (.addChild stage nctx))))
       (.render renderer stage)
       this))
   (request-animation-frame [this callback]
-    (js/window.requestAnimationFrame callback))
-  (draw-polygon [this opts]
-    (draw-polygon opts))
-  (draw-circle [this opts]
-    (draw-circle opts))
-  (draw-rect [this opts]
-    (draw-rect opts))
-  (draw-rounded-rect [this opts]
-    (draw-rounded-rect opts))
-  (draw-sprite [this opts]
-    (draw-sprite opts (:texters this)))
-  (draw-text [this opts]
-    (draw-text opts)))
+    (js/window.requestAnimationFrame callback)))
 
-(defn create-graphics-adapter [dom-id width height]
-  (p/init (map->PixiGraphicsAdapter {:id dom-id}) {:width width :height height}))
+(defn create-graphics-adapter [dom-id opts]
+  (p/init (map->PixiGraphicsAdapter {:id dom-id}) opts))
 
 
 ;TODO - touch and multi-touch
@@ -210,3 +213,20 @@
 
 (defn create-input-adapter [stage]
   (p/init (PixiInputAdapter. stage) stage))
+
+
+(defrecord PixiSoundAdapter [sounds]
+  p/IInit
+  (init [this sounds-to-load]
+    (let [sounds (reduce (fn [sounds [id url]]
+                           (assoc sounds id (js/Audio. url)))
+                         {}
+                         sounds-to-load)]
+      (assoc this :sounds sounds)))
+
+  p/ISoundAdapter
+  (play-sound [this id]
+    (.play (get sounds id))))
+
+(defn create-sound-adapter [sounds]
+  (p/init (PixiSoundAdapter. nil) sounds))

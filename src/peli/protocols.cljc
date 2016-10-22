@@ -39,6 +39,7 @@
   (position-impulses [this] [this val])
   (graphics-adapter [this] [this val])
   (input-adapter [this] [this val])
+  (sound-adapter [this] [this val])
   (collision-matrix [this] [this val]))
 
 
@@ -114,13 +115,7 @@
 
 (defprotocol IGraphicsAdapter
   (render [this game])
-  (request-animation-frame [this callback])
-  (draw-polygon [this opts])
-  (draw-circle [this opts])
-  (draw-rect [this opts])
-  (draw-rounded-rect [this opts])
-  (draw-sprite [this opts])
-  (draw-text [this opts]))
+  (request-animation-frame [this callback]))
 
 ;;adapter should discard events it doesn't understand
 ;; :keyup
@@ -147,3 +142,8 @@
 (defprotocol IInputAdapter
   (set-event-handler [this event func])
   (supported-event? [this event-key]))
+
+
+
+(defprotocol ISoundAdapter
+  (play-sound [this id]))

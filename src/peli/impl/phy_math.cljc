@@ -18,6 +18,8 @@
 
 (defn ceil [val] (Math/ceil val))
 
+(defn round [val] (Math/round val))
+
 (defn =* [a b]
   (<=  (abs (- a b)) epsilon))
 
@@ -88,3 +90,6 @@
   (let [len (dist vec2)
         inv-len (if (> len 0.0001) (/ 1 len) 0)]
     [(* x inv-len) (* y inv-len)]))
+
+(defn average [vals]
+  (/ (apply + vals) (count vals)))

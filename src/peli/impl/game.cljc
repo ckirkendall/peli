@@ -2,7 +2,7 @@
   (:require [peli.protocols :as p]
             [peli.impl.events :as events]))
 
-(defrecord World [id bodies sprites sounds gravity world-state event-handlers]
+(defrecord World [id board bodies sprites sounds gravity world-state event-handlers camera-focus frame]
   p/IIdentity
   (id [this] (:id this))
 
@@ -39,7 +39,8 @@
   (world-state [this val] (assoc this :world-state val)))
 
 (defrecord Game [id worlds block-size active-world pos-impulse-map
-                 graphics-adapter input-adapter fps collision-matrix]
+                 graphics-adapter input-adapter sound-adapter fps
+                 collision-matrix]
   p/IInit
   (init [this _]
     (when (:active-world this)
@@ -66,6 +67,8 @@
   (graphics-adapter [this val] (assoc this :graphics-adapter val))
   (input-adapter [this] (:input-adapter this))
   (input-adapter [this val] (assoc this :input-adapater val))
+  (sound-adapter [this] (:sound-adapter this))
+  (sound-adapter [this val] (assoc this :sound-adapter val))
   (collision-matrix [this] (:collision-matrix this))
   (collision-matrix [this val] (assoc this :collision-matrix val))
 
@@ -105,23 +108,10 @@
   (event-handlers [this]
     (p/event-handlers (p/active-world this)))
 
-  p/IGraphicsAdapter
-  (render [this game]
-    (assoc this
-           :graphics-adapter
-           (p/render (p/graphics-adapter this) this)))
-  (draw-polygon [this opts]
-    (p/draw-polygon (p/graphics-adapter this) opts))
-  (draw-circle [this opts]
-    (p/draw-circle (p/graphics-adapter this) opts))
-  (draw-rect [this opts]
-    (p/draw-rect (p/graphics-adapter this) opts))
-  (draw-rounded-rect [this opts]
-    (p/draw-rounded-rect (p/graphics-adapter this) opts))
-  (draw-sprite [this opts]
-    (p/draw-sprite (p/graphics-adapter this) opts))
-  (draw-text [this opts]
-    (p/draw-text (p/graphics-adapter this) opts)))
+  p/ISoundAdapter
+  (play-sound [this id]
+    (let [adapter (:sound-adapter this)]
+      (p/play-sound adapter id))))
 
 
 

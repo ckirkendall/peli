@@ -8,14 +8,16 @@
 
 ;; ---------------------------------------------------------------------
 ;; Broad Phase
-(defn cell-key [row col]
-  (+ (* row 1000) col))
+#?(:clj (defn cell-key [^Integer row ^Integer col]
+          (+ (* row 1000) col))
+   :cljs (defn cell-key [row  col]
+           (+ (* row 1000) col)))
 
 (defn- matrix-bounds [block-size [[x1 y1] [x2 y2]]]
-  (let [col (max (floor (/ x1 block-size)) 0)
-        row (max (floor (/ y1 block-size)) 0)
-        max-col (max (floor (/ x2 block-size)) 0)
-        max-row (max (floor (/ y2 block-size)) 0)]
+  (let [col (max (int (floor (/ x1 block-size))) 0)
+        row (max (int (floor (/ y1 block-size))) 0)
+        max-col (max (int (floor (/ x2 block-size))) 0)
+        max-row (max (int (floor (/ y2 block-size))) 0)]
     [col row max-col max-row]))
 
 

@@ -16,10 +16,9 @@
 
   p/IBody
   (draw [this game]
-    (p/draw-text game (assoc this :text (text-fn game))))
+    [:text (assoc this :text (text-fn game))])
   (shape [this] (:shape this))
   (shape [this val] (assoc this :shape val))
-
 
   p/ICollisionFilter
   (collidable? [this _] false)
@@ -28,15 +27,17 @@
   (depth [this] 1000))
 
 
-(defn create-dynamic-label [{:keys [id text-fn position font fill rotation shape]
-                             :or {font "12px sans-serif"
-                                  fill "white"
+(defn create-dynamic-label [{:keys [id text-fn position font font-size fill rotation shape]
+                             :or {font :sans-serif
+                                  font-size 12
+                                  fill 0xffffff
                                   rotation 0.0
                                   shape (holder-shape id)}}]
   (map->DynamicLabel {:id id
                       :text-fn text-fn
                       :position position
                       :font font
+                      :font-size 12
                       :fill fill
                       :rotation rotation
                       :shape (holder-shape id)}))

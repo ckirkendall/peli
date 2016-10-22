@@ -17,7 +17,7 @@
 (defn- invert-mm [mass-or-moment]
   (if (or (nil? mass-or-moment)
           (= infinity mass-or-moment))
-    0
+    0.0
     (/ 1.0 mass-or-moment)))
 
 (defn- rotation->matrix [rotation]
@@ -110,10 +110,9 @@
 
   p/IBody
   (draw [this game]
-    (let [[x y] (p/position this)]
-      (p/draw-circle game {:x x :y y
-                           :radius (p/radius this)
-                           :rotation (p/rotation this)})))
+    [:circle {:position (utils/framed-position game (p/position this))
+              :radius (p/radius this)
+              :rotation (p/rotation this)}])
   (shape [this] this)
   (shape [this val] val)
 
@@ -188,9 +187,9 @@
 
   p/IBody
   (draw [this game]
-    (p/draw-polygon game {:position (p/position this)
-                          :points (p/rel-points this)
-                          :rotation (p/rotation this)}))
+    [:poly {:position (utils/framed-position game (p/position this))
+            :points (p/rel-points this)
+            :rotation (p/rotation this)}])
   (shape [this] this)
   (shape [this val] val)
 

@@ -230,7 +230,7 @@
                                                     pos-scale))
                                 [(or pos-impulse-map {}) collisions]
                                 (range pos-iterations))
-        shapes (reduce (fn [shapes {:keys [a b]} colls]
+        shapes (reduce (fn [shapes {:keys [a b]}]
                          (conj shapes a b))
                        #{}
                        colls)

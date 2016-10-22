@@ -8,7 +8,8 @@
                  [re-frame "0.8.0"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [devcards "0.2.1-7"]
-                 [net.mikera/core.matrix "0.55.0"]]
+                 [net.mikera/core.matrix "0.55.0"]
+                 [seesaw "1.4.5"]]
 
   :source-paths ["src"]
   :test-paths ["test"]
@@ -17,9 +18,10 @@
                    :plugins [[lein-cljsbuild "1.1.4"]
                              [lein-figwheel "0.5.6"]
                              [lein-doo "0.1.7"]]
-                   :resource-paths ["dev/resources"]
                    :figwheel {:css-dirs ["dev/resources/public/css"]
                               :server-port 3450}
+                   :source-paths ["src" "dev/src"]
+                   :resource-paths ["resources" "dev/resources"]
                    :cljsbuild
                    {:builds [{:id "dev"
                               :figwheel true

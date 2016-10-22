@@ -1,7 +1,8 @@
 (ns peli.simulation
   (:require
    [peli.protocols :as p]
-   [peli.pixi-adapter :as adapter]
+   #?(:clj [peli.java-adapter :as adapter]
+      :cljs [peli.pixi-adapter :as adapter])
    [peli.impl.game :as game]
    [peli.impl.engine :as engine]
    [peli.impl.geometry :as geo]
@@ -9,13 +10,14 @@
    [peli.impl.collision :as coll]
    [peli.impl.frame :as frame]
    [peli.impl.phy-math :refer [dot mul-vr normalize sub infinity]]
-   [peli.impl.text :as text]))
+   [peli.impl.text :as text]
+   [peli.impl.utils :as utils]))
 
 (def width 600.0)
 (def height 600.0)
+(def frame-width width)
+(def frame-height height)
 (def block-size 40)
-
-
 
 
 (defn create-fps [id]
@@ -24,8 +26,32 @@
     :text-fn (fn [game] (str "FPS: " (p/fps game)))
     :position [20 20]}))
 
-(def gfx-adapter (adapter/create-graphics-adapter "myGameDiv" width height))
-(def input-adapter (adapter/create-input-adapter (:stage gfx-adapter)))
+
+
+(def sounds
+  {:stomp "http://themushroomkingdom.net/sounds/wav/smw/smw_stomp.wav"
+   :jump "http://themushroomkingdom.net/sounds/wav/smw/smw_jump.wav"
+   :reward "http://themushroomkingdom.net/sounds/wav/smw/smw_coin.wav"})
+
+(def sprites
+  {:follower #?(:cljs "http://localhost:8000/follower.png"
+                :clj "follower.png")})
+
+
+(def gfx-adapter
+  #?(:cljs (adapter/create-graphics-adapter "myGameDiv" {:width frame-width
+                                                         :height frame-height
+                                                         :sprites sprites})
+           :clj  (adapter/create-graphics-adapter {:width frame-width
+                                                   :height frame-height
+                                                   :sprites sprites})))
+(def input-adapter
+  #?(:clj (adapter/create-input-adapter gfx-adapter)
+     :cljs (adapter/create-input-adapter (:stage gfx-adapter))))
+
+(def sound-adapter
+  #?(:clj (adapter/create-sound-adapter sounds)
+     :cljs (adapter/create-sound-adapter sounds)))
 
 
 (defrecord FloatingBox [id shape event-handlers]
@@ -54,12 +80,15 @@
   p/IBody
   (draw [this game]
     (let [shape (:shape this)
-          [x y] (p/position shape)]
-      (p/draw-circle game {:x x :y y
-                           :fill (:color this)
-                           :stroke-width 3
-                           :radius (p/radius shape)
-                           :rotation (p/rotation shape)})))
+          radius (p/radius shape)
+          [x y] (utils/framed-position game (p/position shape))]
+      [:sprite {:position [(- x radius)
+                           (- y radius)]
+                :width (* radius 2)
+                :height (* radius 2)
+                :sprite-id :follower
+                :rotation (- (p/rotation shape) (* Math/PI 0.25))
+                :pivot [x y]}]))
   (shape [this] (:shape this))
   (shape [this val] (assoc this :shape val))
 
@@ -68,8 +97,8 @@
 
   p/IStep
   (step [this game]
-    (if (:mouse (p/world-state game))
-      (let [mouse (:mouse (p/world-state game))
+    (if (:mouse-global (p/world-state game))
+      (let [mouse (:mouse-global (p/world-state game))
             shape (p/shape this)
             velocity 100
             pos (p/position shape)
@@ -91,8 +120,9 @@
   (event-handlers [this] event-handlers))
 
 
-(def frame (frame/Frame. 0 0 width height))
 
+(def frame (frame/->Frame 0 0 frame-width frame-height))
+(def board (frame/->Board width height))
 
 (def circle1 (-> (geo/create-circle {:id :circle1
                                     :position [50.0 250.0]
@@ -105,19 +135,20 @@
                           :position [300.0 225.0]
                           :width 50.0
                           :height 50.0
-                          :density 1}))
+                          :density 1.0}))
 
 (def box2 (FloatingBox. :box2
                         (-> (geo/create-box {:id :box2
                                              :position [450.0 220.0]
                                              :width 50.0
                                              :height 50.0
-                                             :density 1})
+                                             :density 1.0})
                             (phy/apply-force [400.0 0.0] [[450.0 200.0]] 1000.0))
                         {:click (fn [e game]
                                   (let [body (p/body game :box2)
                                         shape (p/shape body)
                                         [vx vy] (p/linear-velocity shape)]
+                                    (p/play-sound game :stomp)
                                     (p/body game :box2
                                       (p/shape body
                                         (p/linear-velocity shape [vx 100])))))}))
@@ -160,9 +191,11 @@
                            :density infinity}))
 
 (defn mousemove-global [e game]
-  (let [[x y] (get-in e [:data :position])
+  (let [pos (get-in e [:data :position])
         cur-state (p/world-state game)]
-    (p/world-state game (assoc cur-state :mouse [x y]))))
+    (p/world-state game (assoc cur-state
+                               :mouse-local pos
+                               :mouse-global (utils/global-position game pos)))))
 
 (def world (game/map->World {:id :world1
                              :bodies {:follower follower
@@ -176,7 +209,9 @@
                                       :fps-label (create-fps :fps-label)}
                              :sprites {}
                              :sounds {}
+                             :camera-focus :follower
                              :frame frame
+                             :board board
                              :gravity phy/default-gravity
                              :event-handlers {:mousemove mousemove-global}}))
 
@@ -191,39 +226,13 @@
           :active-world world
           :pos-impulse-map {}
           :graphics-adapter gfx-adapter
-          :input-adapter input-adapter})))
+          :input-adapter input-adapter
+          :sound-adapter sound-adapter})))
 
 (game/init-game game)
 
-(def fr-holder (atom (vec (for [iter (range 50)] 60))))
+(defn start []
+  (engine/animation-loop game))
 
-
-(defn average [vals]
-  (/ (apply + vals) (count vals)))
-
-(defn render [game]
-  (let [adapter (-> (p/graphics-adapter game)
-                    (p/render game))]
-    (p/graphics-adapter game adapter)))
-
-(defn animation-loop
-  ([]
-   (let [now (js/Date.now)]
-     (js/window.setTimeout #(animation-loop now 0) 16)))
-  ([time step-cnt]
-   (let [now (js/Date.now)]
-     (let [target-fps (int (/ 1000 (p/fps @game)))
-           start (js/Date.now)
-           diff (- start time)
-           frame-rate  (Math/ceil (/ 1000 (+ diff 0.00001)))
-           adapter (p/graphics-adapter @game)]
-       (p/request-animation-frame
-        adapter
-        #(animation-loop start (mod (inc step-cnt) (count @fr-holder))))
-       (swap! fr-holder assoc step-cnt frame-rate)
-       (swap! game
-              (fn [db]
-                (-> db
-                    (p/fps (int (average @fr-holder)))
-                    (engine/step (min 0.020 (/ diff 1000)))
-                    render)))))))
+(defn stop []
+  (reset! engine/running false))
