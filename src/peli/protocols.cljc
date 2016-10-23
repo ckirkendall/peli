@@ -40,6 +40,7 @@
   (graphics-adapter [this] [this val])
   (input-adapter [this] [this val])
   (sound-adapter [this] [this val])
+  (adapter-config [this] [this val])
   (collision-matrix [this] [this val]))
 
 

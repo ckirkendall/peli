@@ -1,5 +1,6 @@
 (ns peli.impl.utils
-  (:require [peli.protocols :as p]))
+  (:require [peli.protocols :as p]
+            [peli.impl.phy-math :refer [dot]]))
 
 (defn gen-id [seed]
   (keyword (gensym seed)))
@@ -20,3 +21,12 @@
 (defn global-position [game [fx fy]]
   (let [{:keys [x y]} (p/frame game)]
     [(+ fx x) (+ fy y)]))
+
+
+(defn rotate-to-normal [{:keys [nx ny] :as normal}]
+  (let [dir (cond
+              (and (pos? nx) (pos? (* nx ny))) 1.0
+              (and (pos? nx) (neg? (* nx ny))) -1.0
+              (and (neg? nx) (pos? (* nx ny))) -1.0
+              (and (neg? nx) (neg? (* nx ny))) 1.0)]
+    (* dir (Math/acos (dot normal [1 0])))))

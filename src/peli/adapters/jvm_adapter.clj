@@ -1,4 +1,4 @@
-(ns peli.java-adapter
+(ns peli.adapters.jvm-adapter
   (:use seesaw.core
         seesaw.graphics
         seesaw.color
@@ -6,11 +6,13 @@
   (:import [javax.imageio ImageIO])
   (:require [peli.impl.phy-math :as math]
             [peli.impl.geometry :as geometry]
-            [peli.sound-helper :as sound]
+            [peli.adapters.sound-helper :as sound]
             [peli.protocols :as p]
             [clojure.java.io :as io]
             [clojure.core.async :as async :refer [thread <!! chan put!]]) )
 
+;; ---------------------------------------------------------------------
+;; Graphics Sub System
 
 ; This first handler uses raw Java2D calls to do painting. See (paint2) below
 ; for an example of using Seesaw's simple shape support.
@@ -192,6 +194,9 @@
 (defn create-graphics-adapter [opts]
   (p/init (map->JavaGraphicsAdapter {}) opts))
 
+;; ---------------------------------------------------------------------
+;; Event Sub System
+
 (def pevent->jevent
   {:click :mouse-clicked
    :mousemove :mouse-moved
@@ -253,7 +258,8 @@
 (defn create-input-adapter [graphics-adapter]
   (p/init (JavaInputAdapter. graphics-adapter) graphics-adapter))
 
-
+;; ---------------------------------------------------------------------
+;; Sound Sub System
 
 (defrecord JavaSoundAdapter [sounds]
   p/IInit
@@ -266,3 +272,39 @@
 
 (defn create-sound-adapter [sounds]
   (p/init (JavaSoundAdapter. nil) sounds))
+
+
+;; ---------------------------------------------------------------------
+;; Initialize or reinitialize adapters
+
+(defn initialize-game [game]
+  (let [sounds (p/sounds game)
+        sprites (p/sprites game)
+        sound-adapter (if (p/sound-adapter game)
+                        (p/init (p/sound-adapter game) sounds)
+                        (create-sound-adapter sounds))
+        {:keys [width height]} (or (p/frame game)
+                                   (p/board game))
+        gfx-opts {:width width
+                  :height height
+                  :sprites sprites}
+        gfx-adapter  (if (p/graphics-adapter game)
+                       (p/init (p/graphics-adapter game) gfx-opts)
+                       (create-graphics-adapter gfx-opts))
+        input-adapter (if (p/input-adapter game)
+                        (p/init (p/input-adapter game)
+                                gfx-adapter)
+                        (create-input-adapter gfx-adapter))]
+    (-> game
+        (p/sound-adapter sound-adapter)
+        (p/graphics-adapter gfx-adapter)
+        (p/input-adapter input-adapter))))
+
+
+;; ---------------------------------------------------------------------
+;; Primary Entry Point
+
+(defn adapter-config []
+  (reify p/IInit
+    (init [this game]
+      (initialize-game game))))

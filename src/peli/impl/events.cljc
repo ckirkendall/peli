@@ -22,19 +22,8 @@
             [[] []]
             events)))
 
-(defn process-events [game]
-  (let [events @event-queue
-        [current future] (filter-events events)]
-    (if (compare-and-set! event-queue events [])
-      (reduce (fn [game [time event]]
-                (let [handler-key (first event)
-                      handler (get event-handlers handler-key)]
-                  (handler game event)))
-              game
-              events)
-      (recur game))))
-
-(defn register-handler! [handler-key func]
+;;TODO - this needs to be interceptor based like re-frame 0.8.0
+(defn reg-event-fx [handler-key func]
   (swap! event-handlers assoc handler-key func))
 
 (defn schedule [event mills]
@@ -43,6 +32,30 @@
 (defn dispatch [event]
   (schedule event (now)))
 
+(defn process-events [game]
+  (let [events @event-queue
+        [current future] (filter-events events)]
+    (if (compare-and-set! event-queue events [])
+      (reduce (fn [game [time event]]
+                (let [handler-key (first event)
+                      handler (get event-handlers handler-key)
+                      res (handler {:db game} event)
+                      {:keys [db dispatch schedule]} res
+                      dispatch (if (keyword? (first dispatch))
+                                 [dispatch]
+                                 dispatch)
+                      schedule (if (map? schedule)
+                                 [schedule]
+                                 schedule)]
+                  ;;TDOD - these should be handled through interceptors
+                  (doseq [event dispatch]
+                    (dispatch event))
+                  (doseq [{:keys [ms dispatch]} schedule]
+                    (schedule dispatch ms))
+                  (if db db game)))
+              game
+              events)
+      (recur game))))
 
 ;; ---------------------------------------------------------------------
 ;; Input Handlers

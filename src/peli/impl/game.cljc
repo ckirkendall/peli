@@ -39,13 +39,14 @@
   (world-state [this val] (assoc this :world-state val)))
 
 (defrecord Game [id worlds block-size active-world pos-impulse-map
-                 graphics-adapter input-adapter sound-adapter fps
-                 collision-matrix]
+                 graphics-adapter input-adapter sound-adapter
+                 adapter-config fps collision-matrix]
   p/IInit
   (init [this _]
-    (when (:active-world this)
-      (events/initialize-handlers! (:active-world this)))
-    this)
+    (if (:active-world this)
+      (do (events/initialize-handlers! (:active-world this))
+          (p/init (p/adapter-config this) this))
+      this))
 
   p/IIdentity
   (id [this] (:id this))
@@ -59,16 +60,17 @@
   (fps [this val] (assoc this :fps val))
   (active-world [this] (:active-world this))
   (activate-world [this id]
-    (events/initialize-handlers! (p/world this id))
-    (assoc this :active-world (p/world this id)))
+    (p/init (assoc this :active-world (p/world this id)) nil))
   (position-impulses [this] (:pos-impulse-map this))
   (position-impulses [this val] (assoc this :pos-impulse-map val))
   (graphics-adapter [this] (:graphics-adapter this))
   (graphics-adapter [this val] (assoc this :graphics-adapter val))
   (input-adapter [this] (:input-adapter this))
-  (input-adapter [this val] (assoc this :input-adapater val))
+  (input-adapter [this val] (assoc this :input-adapter val))
   (sound-adapter [this] (:sound-adapter this))
   (sound-adapter [this val] (assoc this :sound-adapter val))
+  (adapter-config [this] (:adapter-config this))
+  (adapter-config [this val] (assoc this :adapter-config val))
   (collision-matrix [this] (:collision-matrix this))
   (collision-matrix [this val] (assoc this :collision-matrix val))
 
@@ -125,9 +127,15 @@
                            (p/input-adapter game)
                            events/possible-input-events)))
 
-(defn init-game [game-atm]
-  (let [input-dispatcher (events/event-dispatcher game-atm)]
-    (swap! game-atm (fn [game]
-                      (-> game
-                          (p/init nil)
-                          (set-global-input-handler input-dispatcher))))))
+
+
+(defn init-game
+  ([game-atm] (init-game game-atm (p/id (p/active-world @game-atm))))
+  ([game-atm active-world]
+   (let [input-dispatcher (events/event-dispatcher game-atm)]
+     (swap! game-atm (fn [game]
+                       (-> game
+                           (p/activate-world active-world)
+                           (set-global-input-handler input-dispatcher)))))))
+
+(defn reset-world [game-atm] (init-game game-atm))

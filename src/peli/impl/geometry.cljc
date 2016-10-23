@@ -313,35 +313,25 @@
       (compute-mass-circle density)))
 
 
-
-(defn create-box [{:keys [id
-                          position
-                          width
-                          height
-                          density
-                          restitution
-                          static-friction
-                          dynamic-friction
-                          rotation
-                          linear-velocity
-                          angular-velocity]
-                   :or {id (utils/gen-id "box")
-                        density infinity
-                        rotation 0.0
-                        linear-velocity [0.0 0.0]
-                        angular-velocity 0.0
-                        restitution 0.2
-                        dynamic-friction 0.2
-                        static-friction 0.8}}]
-  (let [points [[(* -1.0 (/ width 2.0))
-                 (* -1.0 (/ height 2.0))]
-                [(/ width 2.0)
-                 (* -1.0 (/ height 2.0))]
-                [(/ width 2.0)
-                 (/ height 2.0)]
-                [(* -1.0 (/ width 2.0))
-                 (/ height 2.0)]]
-        normals (find-normals points)]
+(defn create-poly [{:keys [id
+                           position
+                           points
+                           density
+                           restitution
+                           static-friction
+                           dynamic-friction
+                           rotation
+                           linear-velocity
+                           angular-velocity]
+                    :or {id (utils/gen-id "box")
+                         density infinity
+                         rotation 0.0
+                         linear-velocity [0.0 0.0]
+                         angular-velocity 0.0
+                         restitution 0.2
+                         dynamic-friction 0.2
+                         static-friction 0.8}}]
+  (let [normals (find-normals points)]
     (-> (map->ConvexPolygon {:id id
                              :position position
                              :prev-position position
@@ -356,3 +346,19 @@
                              :restitution restitution
                              :active true})
         (compute-mass-poly density))))
+
+
+(defn create-box [{:keys [id width height]
+                   :or {id (utils/gen-id "box")}
+                   :as opts}]
+  (let [points [[(* -1.0 (/ width 2.0))
+                 (* -1.0 (/ height 2.0))]
+                [(/ width 2.0)
+                 (* -1.0 (/ height 2.0))]
+                [(/ width 2.0)
+                 (/ height 2.0)]
+                [(* -1.0 (/ width 2.0))
+                 (/ height 2.0)]]]
+    (create-poly (assoc opts
+                        :points points
+                        :id id))))

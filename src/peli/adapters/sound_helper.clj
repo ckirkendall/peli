@@ -1,4 +1,4 @@
-(ns peli.sound-helper
+(ns peli.adapters.sound-helper
   (:require [clojure.java.io :as io]
             [clojure.core.async :refer [go]])
   (:import [java.net URL]

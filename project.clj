@@ -9,7 +9,8 @@
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [devcards "0.2.1-7"]
                  [net.mikera/core.matrix "0.55.0"]
-                 [seesaw "1.4.5"]]
+                 [seesaw "1.4.5"]
+                 [org.clojure/core.async "0.2.395"]]
 
   :source-paths ["src"]
   :test-paths ["test"]

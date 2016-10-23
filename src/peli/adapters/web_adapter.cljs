@@ -1,9 +1,11 @@
-(ns peli.pixi-adapter
+(ns peli.adapters.web-adapter
   (:require [cljsjs.pixi]
             [peli.protocols :as p]
             [peli.impl.utils :as utils]
             [peli.impl.geometry :as geometry]))
 
+;; ---------------------------------------------------------------------
+;; Graphics Sub System
 
 (defn create-stage []
   (new js/PIXI.Container))
@@ -130,15 +132,19 @@
 (defrecord PixiGraphicsAdapter [renderer stage dom-id sprites loader elements]
   p/IInit
   (init [this {:keys [width height sprites]}]
-    (let [renderer (create-renderer width height)
-          stage (create-stage)
-          dom-el (if dom-id
-                   (js/document.getElementId dom-id)
+    (let [renderer (or (:renderer this)
+                       (create-renderer width height))
+          stage (or (:stage this)
+                    (create-stage))
+          dom-el (if (:dom-id this)
+                   (js/document.getElementId (:dom-id this))
                    js/document.body)]
       (doseq [[id url] sprites]
         (.add js/PIXI.loader url))
       (.load js/PIXI.loader #(println "sprites loaded"))
-      (.appendChild dom-el (.-view renderer))
+      (if (.hasChildNodes dom-el)
+        (.replaceChild dom-el (.-view renderer) (.-firstChild dom-el))
+        (.appendChild dom-el (.-view renderer)))
       (assoc this
              :sprites sprites
              :renderer renderer
@@ -161,6 +167,8 @@
 (defn create-graphics-adapter [dom-id opts]
   (p/init (map->PixiGraphicsAdapter {:id dom-id}) opts))
 
+;; ---------------------------------------------------------------------
+;; Event Sub System
 
 ;TODO - touch and multi-touch
 (def single-position-events
@@ -214,6 +222,8 @@
 (defn create-input-adapter [stage]
   (p/init (PixiInputAdapter. stage) stage))
 
+;; ---------------------------------------------------------------------
+;; Sound Sub System
 
 (defrecord PixiSoundAdapter [sounds]
   p/IInit
@@ -230,3 +240,39 @@
 
 (defn create-sound-adapter [sounds]
   (p/init (PixiSoundAdapter. nil) sounds))
+
+
+;; ---------------------------------------------------------------------
+;; Initialize or reinitialize adapters
+
+(defn initialize-game [game dom-id]
+  (let [sounds (p/sounds game)
+        sprites (p/sprites game)
+        sound-adapter (if (p/sound-adapter game)
+                        (p/init (p/sound-adapter game) sounds)
+                        (create-sound-adapter sounds))
+        {:keys [width height]} (or (p/frame game)
+                                   (p/board game))
+        gfx-opts {:width width
+                  :height height
+                  :sprites sprites}
+        gfx-adapter  (if (p/graphics-adapter game)
+                       (p/init (p/graphics-adapter game) gfx-opts)
+                       (create-graphics-adapter dom-id gfx-opts))
+        input-adapter (if (p/input-adapter game)
+                        (p/init (p/input-adapter game)
+                                (:stage gfx-adapter))
+                        (create-input-adapter (:stage gfx-adapter)))]
+    (-> game
+        (p/sound-adapter sound-adapter)
+        (p/graphics-adapter gfx-adapter)
+        (p/input-adapter input-adapter))))
+
+
+;; ---------------------------------------------------------------------
+;; Primary Entry Point
+
+(defn adapter-config [dom-id]
+  (reify p/IInit
+    (init [this game]
+      (initialize-game game dom-id))))
