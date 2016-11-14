@@ -3,13 +3,14 @@
         seesaw.graphics
         seesaw.color
         seesaw.font)
-  (:import [javax.imageio ImageIO])
+  (:import [javax.imageio ImageIO]
+           [java.awt RenderingHints])
   (:require [peli.impl.phy-math :as math]
             [peli.impl.geometry :as geometry]
             [peli.adapters.sound-helper :as sound]
             [peli.protocols :as p]
             [clojure.java.io :as io]
-            [clojure.core.async :as async :refer [thread <!! chan put!]]) )
+            [clojure.core.async :as async :refer [thread <!! chan put! timeout]]) )
 
 ;; ---------------------------------------------------------------------
 ;; Graphics Sub System
@@ -114,26 +115,49 @@
     (= tag :g)
     (let [[opts & children] opts]
       (draw-container ctx resources opts children))
+
     (= tag :sprite)
     (draw-sprite ctx resources (first opts))
-    :else
+
+    (contains? tag->draw tag)
     (let [draw-fn (tag->draw tag)]
       (draw-fn ctx (first opts)))))
 
 
 (def cur-state (atom nil))
 
+(defn calculate-frame-scale [canvas {:keys [width height]}]
+  (let [w (.getWidth canvas)
+        h (.getHeight canvas)
+        _ (println width height w h)
+        y-ratio (if w (/ w width) width)
+        x-ratio (/ h height)]
+    (min x-ratio y-ratio)))
+
 (defn render-state-fn [resources]
   (fn render-state [c g]
     (try
-      (let [w (.getWidth c)
-            h (.getHeight c)
-            game @cur-state]
-        (let [frame (p/frame game)
-              bodies (sort-by #(p/depth %) (vals (p/bodies game)))]
-          (doseq [body bodies]
-            (when (geometry/bounds-overlap? (p/shape body) frame)
-              (draw-hiccup g (assoc resources ::component c) (p/draw body game))))))
+      (let [game @cur-state]
+        (when game
+          (let [{:keys [width height] :as frame} (p/frame game)
+                scale-ratio (calculate-frame-scale c frame)
+                bodies (sort-by #(p/depth %) (vals (p/bodies game)))
+                img (.createImage c width height)
+                img-gfx (.createGraphics img)
+                img-width (* scale-ratio width)
+                img-height (* scale-ratio height)
+                img-x (/ (- (.getWidth c) img-width) 2.0)
+                img-y (/ (- (.getHeight c) img-height) 2.0)]
+            (.setRenderingHint img-gfx
+                             RenderingHints/KEY_ANTIALIASING
+                             RenderingHints/VALUE_ANTIALIAS_ON)
+            (.setRenderingHint g
+                             RenderingHints/KEY_ANTIALIASING
+                             RenderingHints/VALUE_ANTIALIAS_ON)
+            (doseq [body bodies]
+              (when (geometry/bounds-overlap? (p/shape body) frame)
+                (draw-hiccup img-gfx (assoc resources ::component c) (p/draw body game))))
+            (.drawImage g img img-x img-y img-width img-height c))))
       (catch Exception e
         (.printStackTrace e)))))
 
@@ -146,6 +170,7 @@
              (catch Exception e
                (println :ERROR e)
                (.printStackTrace e)))
+        (<!! (timeout 5))
         (recur)))))
 
 
@@ -167,12 +192,20 @@
           tmp-canvas (canvas
                        :id :canvas
                        :background "#000000"
+                       :focusable? true
+                       :size [width :by height]
                        :paint (render-state-fn resources))
           frame (frame :title "Hello",
                        :content "Hello, Seesaw",
-                       :size [width :by (+  height 20)]
+                       :size [width :by height]
                        :content tmp-canvas)]
       (show! frame)
+      (println :CANVAS
+               (.getWidth tmp-canvas)
+               (.getHeight tmp-canvas)
+               (.getWidth frame)
+               (.getHeight frame))
+      (request-focus! tmp-canvas)
       (start-render-thread canvas input-chan)
       (assoc this
              :resources resources
@@ -200,9 +233,9 @@
 (def pevent->jevent
   {:click :mouse-clicked
    :mousemove :mouse-moved
-   :keypress :key-pressed
+   :keypress :key-typed
    :keyup :key-released
-   :keydown :key-typed})
+   :keydown :key-pressed})
 
 (def single-position-events
   #{:mouseenter :mouseleave :mousemove :click :dbclick})
@@ -210,12 +243,19 @@
 (def key-events
   #{:keyup :keydown :keypress})
 
-(defn transform-event [type event]
+(defn transform-event [canvas type event]
   (cond
     (single-position-events type)
-    (let [point (-> event (.getPoint))
-          pos [(double (.-x point))
-               (double (.-y point))]]
+    (let [w (.getWidth canvas)
+          h (.getHeight canvas)
+          game @cur-state
+          {:keys [width height] :as frame} (p/frame game)
+          scale-ratio (calculate-frame-scale canvas frame)
+          offset-x (/ (- w (* scale-ratio width)) 2)
+          offset-y (/ (- h (* scale-ratio height) 2))
+          point (-> event (.getPoint))
+          pos [(/ (- (double (.-x point)) offset-x) scale-ratio)
+               (/ (- (double (.-y point)) offset-y) scale-ratio)]]
       {:type type
        :data {:position pos
               :ctrl-key (.isControlDown event)
@@ -224,7 +264,7 @@
               :meta-key (.isMetaDown event)}
        :event event})
     (key-events type)
-    (let [key-code (.-keyCode event)]
+    (let [key-code (.getKeyCode event)]
       {:type type
        :data {:key-code key-code
               :ctrl-key (.isControlDown event)
@@ -249,7 +289,7 @@
       (listen render-canvas
               (pevent->jevent event)
               (fn [e]
-                (func (transform-event event e))))
+                (func (transform-event render-canvas event e))))
       this))
   (supported-event? [this event-type]
     ((set (keys pevent->jevent)) event-type)))

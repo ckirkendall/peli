@@ -2,7 +2,6 @@
   (:require [peli.protocols :as p]
             [peli.impl.physics :as phy]
             [peli.impl.collision :as coll]
-            [peli.impl.utils :refer [is-static?]]
             [peli.impl.phy-math :refer [sub add dot cross-vr cross-rv
                                         cross-vv mul-vr dist-sqr =*
                                         transpose normalize clamp
@@ -19,8 +18,8 @@
 
 
 (defn has-static? [{:keys [a b]}]
-  (or (is-static? a)
-      (is-static? b)))
+  (or (p/static? a)
+      (p/static? b)))
 
 ;; ---------------------------------------------------------------------
 ;; Impulse/Collision Response
@@ -187,8 +186,8 @@
                    (if (< separation 0)
                      imp-map
                      (let [pos-imp (* scale (max (- separation k-slop) 0.0))
-                           pos-imp (if (or (is-static? a)
-                                           (is-static? b))
+                           pos-imp (if (or (p/static? a)
+                                           (p/static? b))
                                      (* pos-imp 2.0)
                                      pos-imp)
                            id-a (p/id a)
@@ -197,14 +196,14 @@
                            [imp-x-b imp-y-b] (get imp-map id-b [0 0])
                            [n-x n-y] normal]
                        (cond-> imp-map
-                         (not (is-static? a))
+                         (not (p/static? a))
                          (assoc
                           (:id a)
                           (let [cs (get contact-share-map id-a)]
                             [(- imp-x-a (* n-x pos-imp cs))
                              (- imp-y-a (* n-y pos-imp cs))]))
 
-                         (not (is-static? b))
+                         (not (p/static? b))
                          (assoc
                           (:id b)
                           (let [cs (get contact-share-map id-b)]
@@ -215,7 +214,7 @@
     [imp-map colls]))
 
 (defn post-solve-position [shape pos-impulse-map]
-  (when-not (is-static? shape) shape
+  (when-not (p/static? shape) shape
    (let [[imp-x imp-y :as imp] (pos-impulse-map (p/id shape) [0 0])]
      (if (or (not= imp-x 0.0) (not= imp-y 0.0))
        (p/translate shape imp)

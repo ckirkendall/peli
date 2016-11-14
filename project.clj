@@ -10,7 +10,8 @@
                  [devcards "0.2.1-7"]
                  [net.mikera/core.matrix "0.55.0"]
                  [seesaw "1.4.5"]
-                 [org.clojure/core.async "0.2.395"]]
+                 [org.clojure/core.async "0.2.395"]
+                 [org.clojure/data.xml "0.0.8"]]
 
   :source-paths ["src"]
   :test-paths ["test"]

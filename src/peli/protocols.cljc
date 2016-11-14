@@ -72,6 +72,9 @@
 (defprotocol IInteractive
   (event-handlers [this]))
 
+(defprotocol IStatic
+  (static? [this]))
+
 
 ;; ---------------------------------------------------------------------
 ;; Geometry

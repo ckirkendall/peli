@@ -126,6 +126,10 @@
       [[(- x r) (- y r)]
        [(+ x r) (+ y r)]]))
 
+  p/IStatic
+  (static? [this]
+    (utils/is-static? this))
+
   p/IShape
   (rotate [this radians] (update this :rotation + radians))
   (rotation [this] (:rotation this))
@@ -210,6 +214,10 @@
                   (max max-y y)]])
               [p1 p1]
               r-points)))
+
+  p/IStatic
+  (static? [this]
+    (utils/is-static? this))
 
   p/IShape
   (rotate [this radians]

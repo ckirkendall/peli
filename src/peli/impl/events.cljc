@@ -111,6 +111,7 @@
 
 
 (def key-events #{:keypress :keyup :keydown})
+(def position-events #{:mousemove :click :mousedown :mouseup :touchstart :touchend :touchmove})
 
 (defn process-key-events [game e]
   (reduce (fn [game [id handler]]
@@ -118,7 +119,7 @@
               (handler e game)
               game))
           game
-          (get-in @input-handlers (:type e))))
+          (get @input-handlers (:type e))))
 
 
 (defn process-position-events [game {:keys [type] :as e}]
@@ -145,5 +146,5 @@
               (key-events (:type e))
               (process-key-events e)
 
-              (not (key-events (type e)))
+              (position-events (:type e))
               (process-position-events e)))))

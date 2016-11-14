@@ -38,7 +38,11 @@
   (step [this game] this)
 
   p/IInteractive
-  (event-handlers [this] nil))
+  (event-handlers [this] nil)
+
+  p/IStatic
+  (static? [this]
+    (p/static? (p/shape this))))
 
 ;; ---------------------------------------------------------------------
 ;; Collision Management
@@ -66,8 +70,8 @@
                   b (p/body game bid)]
               (and (p/collidable? a b)
                    (p/collidable? b a)
-                   (or (not (utils/is-static? (p/shape a)))
-                       (not (utils/is-static? (p/shape b)))))))
+                   (or (not (p/static? (p/shape a)))
+                       (not (p/static? (p/shape b)))))))
           (map vec pairs)))
 
 (defn dispatch-collision [game {:keys [a b] :as coll}]

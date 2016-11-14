@@ -124,7 +124,7 @@
       (draw-container opts (map draw-hiccup children)))
     (= tag :sprite)
     (draw-sprite (first opts) (:sprites adapter))
-    :else
+    (contains? tag->draw tag)
     (let [draw-fn (tag->draw tag)]
       (draw-fn (first opts)))))
 
@@ -158,7 +158,8 @@
         (when (geometry/bounds-overlap? (p/shape body) frame)
           (let [nctx (->> (p/draw body game)
                           (draw-hiccup this))]
-            (.addChild stage nctx))))
+            (when ntx
+              (.addChild stage nctx)))))
       (.render renderer stage)
       this))
   (request-animation-frame [this callback]
