@@ -31,7 +31,7 @@
                               :compiler {:asset-path "js/out"
                                          :output-to "dev/resources/public/js/main.js"
                                          :output-dir "dev/resources/public/js/out"
-                                         :main peli.simulation
+                                         :main peli.simple-game
                                          :optimizations :none
                                          :source-map-timestamp true
                                          :source-map true}}]}}})

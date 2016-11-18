@@ -182,3 +182,6 @@
           :fps 60
           :pos-impulse-map {}
           :adapter-config adapter-config})))
+
+
+(peli.core/start game :world1)

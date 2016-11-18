@@ -1,23 +1,24 @@
 (ns peli.impl.tile-map
+  #?(:cljs (:require-macros [peli.impl.tile-map :refer [load-map]]))
   (:require #?(:clj [clojure.java.io :as io])
-            [clojure.xml :as xml]
+            #?(:clj [clojure.xml :as xml])
+            #?(:cljs [cljs.reader :refer [read-string]])
             [clojure.string :as str]
             [peli.impl.background-image :as bg-img]
             [peli.impl.geometry :refer [create-box create-circle create-poly]]))
 
-#?(:clj
-   (defn load-map [resource-path]
-     (let [tm-in (-> resource-path
-                     io/resource
-                     io/input-stream)]
-       (xml/parse tm-in))))
+(defn load-map [resource-path]
+  #?(:clj (let [tm-in (-> resource-path
+                          io/resource
+                          io/input-stream)]
+            (xml/parse tm-in))))
 
 ;;we write this out as a string and read it in
 ;;because it the google closure compiler has
 ;;some issues with deeply nested clojurescript
 ;;structures
 (defmacro inline-tile-map [tile-path]
-  `(read ~(pr-str (load-map tile-path))))
+  `(cljs.reader/read-string ~(pr-str (load-map tile-path))))
 
 (defn read-double [val]
   (double (read-string val)))
@@ -34,7 +35,6 @@
 
 (defn extract-image-layers [tile-map]
   (let [imgs (filter #(= :imagelayer (:tag %)) (:content tile-map))]
-    (println :imgs imgs)
     (for [{:keys [content]} imgs]
       (let [[{{:keys [offsetx offsety source width height]
                 :or {offsetx "0"
@@ -55,9 +55,7 @@
           specs))
 
 (defn point-str->points [point-str]
-  (println :point-str point-str)
   (let [point-strs (partition 2 (str/split point-str #" |,"))]
-    (println point-strs)
     (map (fn [[x y]]
            [(read-double x)
             (read-double y)]) point-strs)))
@@ -92,7 +90,6 @@
                    (remove nil?
                            (map #(let [id (get-in % [:attrs :id])
                                        type (get-in % [:attrs :type])
-                                       _ (println "TYPE:" type)
                                        factory (get factory-map type
                                                     (get factory-map id identity))]
                                    (factory (convert-shape [offset-x offset-y] %))) shapes)))}))

@@ -7,6 +7,8 @@
 ;; ---------------------------------------------------------------------
 ;; Graphics Sub System
 
+(def sprites-loaded? (atom false))
+
 (defn create-stage []
   (new js/PIXI.Container))
 
@@ -63,21 +65,23 @@
 
 (defn draw-sprite [{:keys [position width height sprite-id
                            rotation pivot] :as opts} sprites]
-  (let [texture (.-texture (aget js/PIXI.loader.resources (get sprites sprite-id)))
-        sprite (js/PIXI.Sprite. texture)
-        [x y] position
-        [pvx pvy] (or pivot position)
-        p-point (js/PIXI.Point. 0.5 0.5)
-        anchor (.-anchor sprite)]
-    (set! (.-x sprite) (+ x (/ width 2)))
-    (set! (.-y sprite) (+ y (/ width 2)))
-    (set! (.-width sprite) width)
-    (set! (.-height sprite) height)
-    (when rotation
-      (set! (.-x anchor) 0.5)
-      (set! (.-y anchor) 0.5)
-      (set! (.-rotation sprite) rotation))
-    sprite))
+  (when @sprites-loaded?
+    (let [texture (.-texture (aget js/PIXI.loader.resources (get sprites sprite-id)))
+          sprite (js/PIXI.Sprite. texture)
+          [x y] position
+          [pvx pvy] (or pivot position)
+          p-point (js/PIXI.Point. 0.5 0.5)
+          anchor (.-anchor sprite)]
+
+      (set! (.-x sprite) x #_(+ x (/ width 2)))
+      (set! (.-y sprite) y #_(+ y (/ height 2)))
+      (set! (.-width sprite) width)
+      (set! (.-height sprite) height)
+      (when rotation
+        (set! (.-x anchor) 0.5)
+        (set! (.-y anchor) 0.5)
+        (set! (.-rotation sprite) rotation))
+      sprite)))
 
 
 (defn draw-text [{:keys [text font font-size fill position]}]
@@ -129,19 +133,58 @@
       (draw-fn (first opts)))))
 
 
+(defn calculate-frame-scale [canvas {:keys [width height]}]
+  (let [w (.-width canvas)
+        h (.-height canvas)
+        x-ratio (if w (/ w width) width)
+        y-ratio (/ h height)]
+    (min x-ratio y-ratio)))
+
+(defn scale-stage [renderer stage {:keys [width height] :as frame}]
+  (let [frame-scale (calculate-frame-scale renderer frame)
+        x-offset (/ (- (.-width renderer)
+                       (* frame-scale width)) 2)
+        y-offset (/ (- (.-height renderer)
+                       (* frame-scale height)) 2)]
+    (set! (.-x stage) x-offset)
+    (set! (.-y stage) y-offset)
+    (set! (.-scale stage) (js/PIXI.Point. (double frame-scale)
+                                          (double frame-scale)))))
+
+(defn detect-resize [dom-el renderer]
+  (fn [e]
+    (js/console.log js/window)
+    (let [[width height] (if (= js/document.body
+                                dom-el)
+                           [(double (.-innerWidth js/window))
+                            (double (.-innerHeight js/window))]
+                           (let [rect (.getBoundedClientRect dom-el)]
+                             [(double (.-width rect))
+                              (double (.height rect))]))]
+      (println width height)
+      (.resize renderer width height))))
+
+(def cur-state (atom nil))
+
 (defrecord PixiGraphicsAdapter [renderer stage dom-id sprites loader elements]
   p/IInit
   (init [this {:keys [width height sprites]}]
+    (reset! sprites-loaded? false)
     (let [renderer (or (:renderer this)
                        (create-renderer width height))
           stage (or (:stage this)
                     (create-stage))
           dom-el (if (:dom-id this)
                    (js/document.getElementId (:dom-id this))
-                   js/document.body)]
+                   js/document.body)
+          resize-fn (detect-resize dom-el renderer)]
+      (resize-fn nil)
+      (set! (.-onresize js/window) resize-fn)
       (doseq [[id url] sprites]
         (.add js/PIXI.loader url))
-      (.load js/PIXI.loader #(println "sprites loaded"))
+      (.load js/PIXI.loader #(do
+                               (reset! sprites-loaded? true)
+                               (println "sprites loaded")))
       (if (.hasChildNodes dom-el)
         (.replaceChild dom-el (.-view renderer) (.-firstChild dom-el))
         (.appendChild dom-el (.-view renderer)))
@@ -151,14 +194,16 @@
              :stage stage)))
   p/IGraphicsAdapter
   (render [{:keys [stage renderer] :as this} game]
+    (reset! cur-state game)
     (.removeChildren stage)
     (let [frame (p/frame game)
           bodies (sort-by #(p/depth %) (vals (p/bodies game)))]
+      (scale-stage renderer stage frame)
       (doseq [body bodies]
         (when (geometry/bounds-overlap? (p/shape body) frame)
           (let [nctx (->> (p/draw body game)
                           (draw-hiccup this))]
-            (when ntx
+            (when nctx
               (.addChild stage nctx)))))
       (.render renderer stage)
       this))
@@ -178,12 +223,22 @@
 (def key-events
   #{:keyup :keydown :keypress})
 
-(defn transform-event [event]
+(defn transform-event [event renderer]
   (let [type (keyword (.-type event))]
     (cond
       (single-position-events type)
-      (let [point (-> event .-data .-global)
-            pos [(.-x point) (.-y point)]]
+      (let [w (.-width renderer)
+            h (.-height renderer)
+            game @cur-state
+            {:keys [width height] :as frame} (p/frame game)
+            scale-ratio (calculate-frame-scale renderer frame)
+            offset-x (/ (- w (* scale-ratio width)) 2.0)
+            offset-y (/ (- h (* scale-ratio height)) 2.0)
+            point (-> event .-data .-global)
+            pos [(/ (- (double (.-x point)) offset-x) scale-ratio)
+                 (/ (- (double (.-y point)) offset-y) scale-ratio)]]
+        (when (= :click type)
+          (println w h scale-ratio pos offset-y offset-x))
         {:type type
          :data {:position pos
                 :ctrl-key (.-ctrlKey event)
@@ -205,23 +260,30 @@
       {:type type
        :event event})))
 
-(defrecord PixiInputAdapter [stage]
+(defrecord PixiInputAdapter [stage renderer]
   p/IInit
-  (init [this stage]
+  (init [this {:keys [stage renderer]}]
     (set! (.-interactive stage) true)
     #_(set! (.-interactiveChildren stage) false)
-    (assoc this :stage stage))
+    (assoc this
+           :stage stage
+           :renderer renderer))
 
   p/IInputAdapter
   (set-event-handler [this event func]
-    (.on (:stage this) (name event) #(-> % transform-event func))
+    (js/console.log "ADD EVENT: " event)
+    (let [event-fn #(-> % (transform-event (:renderer this)) func)]
+      (if (key-events event)
+        (js/document.addEventListener (name event) event-fn)
+        (.on (:stage this) (name event) event-fn)))
+
     this)
   (supported-event? [this event-type] true))
 
 
 
-(defn create-input-adapter [stage]
-  (p/init (PixiInputAdapter. stage) stage))
+(defn create-input-adapter [{:keys [stage renderer] :as opts}]
+  (p/init (PixiInputAdapter. stage renderer) opts))
 
 ;; ---------------------------------------------------------------------
 ;; Sound Sub System
@@ -262,8 +324,8 @@
                        (create-graphics-adapter dom-id gfx-opts))
         input-adapter (if (p/input-adapter game)
                         (p/init (p/input-adapter game)
-                                (:stage gfx-adapter))
-                        (create-input-adapter (:stage gfx-adapter)))]
+                                gfx-adapter)
+                        (create-input-adapter gfx-adapter))]
     (-> game
         (p/sound-adapter sound-adapter)
         (p/graphics-adapter gfx-adapter)

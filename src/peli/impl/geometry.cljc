@@ -142,16 +142,16 @@
   (position [this val] (assoc this :position val))
   (prev-position [this] (:prev-position this))
   (prev-position [this val] (assoc this :prev-position val))
-
-  (inv-mass [this] (:inv-mass this))
+  (mass [this] (:mass this))
   (mass [this val] (assoc this
                           :inv-mass (invert-mm val)
                           :mass val))
-  (inv-moment-i [this] (:inv-moment-i this))
+  (inv-mass [this] (:inv-mass this))
   (moment-i [this] (:moment-i this))
   (moment-i [this val] (assoc this
                               :inv-moment-i (invert-mm val)
                               :moment-i val))
+  (inv-moment-i [this] (:inv-moment-i this))
   (linear-velocity [this] (:linear-velocity this))
   (linear-velocity [this val] (assoc this :linear-velocity val))
   (angular-velocity [this] (:angular-velocity this))
@@ -235,7 +235,6 @@
   (position [this val] (assoc this :position val))
   (prev-position [this] (:prev-position this))
   (prev-position [this val] (assoc this :prev-position val))
-
   (inv-mass [this] (:inv-mass this))
   (mass [this val]  (assoc this
                            :inv-mass (invert-mm val)

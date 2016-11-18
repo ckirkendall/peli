@@ -17,16 +17,18 @@
 ;; game control
 
 (defn start [game-atm world-id]
-  (reset! engine/running true)
-  (game/init-game game-atm world-id)
-  (engine/animation-loop game-atm))
+  (go
+    (<! (timeout 100))
+    (reset! engine/running true)
+    (game/init-game game-atm world-id)
+    (<! (timeout 1000))
+    (engine/animation-loop game-atm)))
 
 (defn stop []
   (reset! engine/running false))
 
 (defn reset [game world-id]
   (stop)
-  (Thread/sleep 100)
   (start game world-id))
 
 
